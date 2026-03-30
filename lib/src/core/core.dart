@@ -1,1 +1,11 @@
-// Core contracts and models for backend-agnostic sync orchestration.
+export 'in_memory_task_state_store.dart';
+export 'logger.dart';
+export 'precondition.dart';
+export 'retry_policy.dart';
+export 'sync_context.dart';
+export 'sync_task.dart';
+export 'sync_task_result.dart';
+export 'sync_task_status.dart';
+export 'sync_trigger.dart';
+export 'task_state.dart';
+export 'task_state_store.dart';
