@@ -1,0 +1,20 @@
+name: easy_sync
+description: A backend-agnostic Flutter sync orchestration package with preconditions, retries, state tracking, and background scheduling hooks.
+version: 0.1.0
+homepage: https://example.com/easy_sync
+repository: https://example.com/easy_sync
+issue_tracker: https://example.com/easy_sync/issues
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.12.0
+  workmanager: ^0.6.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.2
