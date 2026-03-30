@@ -2,40 +2,33 @@ import 'package:easy_sync/easy_sync.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('ExponentialBackoffRetryPolicy', () {
+  group('RetryConfig', () {
     test('returns increasing delay until max attempts', () {
-      const policy = ExponentialBackoffRetryPolicy(
+      const config = RetryConfig.exponential(
         initialDelay: Duration(seconds: 1),
         maxDelay: Duration(seconds: 8),
         maxAttempts: 3,
       );
 
-      expect(
-        policy.nextDelay(attempt: 1, error: Exception('x')),
-        const Duration(seconds: 1),
-      );
-      expect(
-        policy.nextDelay(attempt: 2, error: Exception('x')),
-        const Duration(seconds: 2),
-      );
-      expect(
-        policy.nextDelay(attempt: 3, error: Exception('x')),
-        const Duration(seconds: 4),
-      );
-      expect(policy.nextDelay(attempt: 4, error: Exception('x')), isNull);
+      expect(config.nextDelay(1), const Duration(seconds: 1));
+      expect(config.nextDelay(2), const Duration(seconds: 2));
+      expect(config.nextDelay(3), const Duration(seconds: 4));
+      expect(config.nextDelay(4), isNull);
     });
 
     test('caps delay by maxDelay', () {
-      const policy = ExponentialBackoffRetryPolicy(
+      const config = RetryConfig.exponential(
         initialDelay: Duration(seconds: 5),
         maxDelay: Duration(seconds: 6),
         maxAttempts: 5,
       );
 
-      expect(
-        policy.nextDelay(attempt: 2, error: Exception('x')),
-        const Duration(seconds: 6),
-      );
+      expect(config.nextDelay(2), const Duration(seconds: 6));
+    });
+
+    test('disabled config does not schedule retry', () {
+      const config = RetryConfig.disabled();
+      expect(config.nextDelay(1), isNull);
     });
   });
 }

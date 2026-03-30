@@ -7,7 +7,7 @@ void main() {
       final store = InMemorySyncTaskStateStore();
       final orchestrator = SyncOrchestrator(
         taskRegistrations: [
-          SyncTaskRegistration(task: _FakeTask.success(id: 'a')),
+          SyncTaskRegistration(task: _FakeTask.success(key: 'a')),
         ],
         stateStore: store,
       );
@@ -25,7 +25,7 @@ void main() {
       final orchestrator = SyncOrchestrator(
         taskRegistrations: [
           SyncTaskRegistration(
-            task: _FakeTask.success(id: 'a'),
+            task: _FakeTask.success(key: 'a'),
             preconditions: [
               PredicatePrecondition(
                 name: 'network',
@@ -49,21 +49,16 @@ void main() {
       final store = InMemorySyncTaskStateStore();
       final orchestrator = SyncOrchestrator(
         taskRegistrations: [
-          SyncTaskRegistration(task: _FakeTask.failure(id: 'a')),
+          SyncTaskRegistration(task: _FakeTask.failure(key: 'a')),
         ],
         stateStore: store,
-        retryPolicy: const ExponentialBackoffRetryPolicy(
-          initialDelay: Duration(seconds: 3),
-          maxAttempts: 1,
-        ),
-        onRetryScheduled:
-            ({
-              required String taskId,
-              required Duration delay,
-              required Map<String, Object?> metadata,
-            }) async {
-              scheduled[taskId] = delay;
-            },
+        onRetryScheduled: ({
+          required String taskId,
+          required Duration delay,
+          required Map<String, Object?> metadata,
+        }) async {
+          scheduled[taskId] = delay;
+        },
       );
 
       await orchestrator.syncInBackground();
@@ -78,19 +73,40 @@ void main() {
 }
 
 class _FakeTask implements SyncTask {
-  _FakeTask.success({required this.id}) : _result = SyncTaskResult.success();
+  _FakeTask.success({required this.key})
+      : _handler = _FakeTaskHandler(SyncResult.success()),
+        policy = const SyncPolicy();
 
-  _FakeTask.failure({required this.id})
-    : _result = SyncTaskResult.failure(error: StateError('boom'));
+  _FakeTask.failure({required this.key})
+      : _handler =
+            _FakeTaskHandler(SyncResult.retryable(error: StateError('boom'))),
+        policy = const SyncPolicy(
+          retry: RetryConfig.exponential(
+            initialDelay: Duration(seconds: 3),
+            maxAttempts: 1,
+          ),
+        );
 
   @override
-  final String id;
-
-  final SyncTaskResult _result;
+  final String key;
 
   @override
-  String get description => 'Fake $id';
+  final SyncPolicy policy;
 
   @override
-  Future<SyncTaskResult> run(SyncContext context) async => _result;
+  List<SyncPrecondition> get preconditions => const <SyncPrecondition>[];
+
+  @override
+  SyncTaskHandler get handler => _handler;
+
+  final SyncTaskHandler _handler;
+}
+
+class _FakeTaskHandler implements SyncTaskHandler {
+  _FakeTaskHandler(this._result);
+
+  final SyncResult _result;
+
+  @override
+  Future<SyncResult> execute(SyncContext context) async => _result;
 }

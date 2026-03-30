@@ -1,10 +1,13 @@
-import '../models/sync_context.dart';
-import '../models/sync_task_result.dart';
+import '../models/sync_policy.dart';
+import 'precondition.dart';
+import 'sync_task_handler.dart';
 
 abstract interface class SyncTask {
-  String get id;
+  String get key;
 
-  String get description;
+  SyncPolicy get policy;
 
-  Future<SyncTaskResult> run(SyncContext context);
+  List<SyncPrecondition> get preconditions;
+
+  SyncTaskHandler get handler;
 }

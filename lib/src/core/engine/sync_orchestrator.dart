@@ -11,7 +11,6 @@ class SyncOrchestrator {
     required List<SyncTaskRegistration> taskRegistrations,
     required SyncTaskStateStore stateStore,
     this.globalPreconditions = const <SyncPrecondition>[],
-    this.retryPolicy = const NoRetryPolicy(),
     this.logger = const NoopSyncLogger(),
     this.onRetryScheduled,
     DateTime Function()? clock,
@@ -19,13 +18,12 @@ class SyncOrchestrator {
         _clock = clock ?? DateTime.now,
         _registrations = {
           for (final registration in taskRegistrations)
-            registration.task.id: registration,
+            registration.task.key: registration,
         };
 
   final Map<String, SyncTaskRegistration> _registrations;
   final SyncTaskStateStore _stateStore;
   final List<SyncPrecondition> globalPreconditions;
-  final RetryPolicy retryPolicy;
   final SyncLogger logger;
   final RetryScheduleCallback? onRetryScheduled;
   final DateTime Function() _clock;
@@ -57,8 +55,16 @@ class SyncOrchestrator {
     required SyncTrigger trigger,
     Map<String, Object?> metadata = const {},
   }) async {
-    for (final taskId in _registrations.keys) {
-      await _runTaskById(taskId: taskId, trigger: trigger, metadata: metadata);
+    for (final registration in _registrations.values) {
+      if (!registration.task.policy.allows(trigger)) {
+        continue;
+      }
+
+      await _runTaskById(
+        taskId: registration.task.key,
+        trigger: trigger,
+        metadata: metadata,
+      );
     }
   }
 
@@ -75,14 +81,20 @@ class SyncOrchestrator {
 
     final now = _clock();
     final context = SyncContext(
-      trigger: trigger,
-      timestamp: now,
-      metadata: metadata,
+      metadata: <String, Object?>{
+        ...metadata,
+        'trigger': trigger.name,
+        'timestamp': now.toIso8601String(),
+        'taskKey': taskId,
+      },
     );
 
     final unmet = await _firstUnmetPrecondition(
       context,
-      taskPreconditions: registration.preconditions,
+      taskPreconditions: <SyncPrecondition>[
+        ...registration.task.preconditions,
+        ...registration.preconditions,
+      ],
     );
     if (unmet != null) {
       final skippedState = _stateStore.getOrCreate(taskId).copyWith(
@@ -109,11 +121,11 @@ class SyncOrchestrator {
       ),
     );
 
-    SyncTaskResult result;
+    SyncResult result;
     try {
-      result = await registration.task.run(context);
+      result = await registration.task.handler.execute(context);
     } catch (error, stackTrace) {
-      result = SyncTaskResult.failure(error: error, stackTrace: stackTrace);
+      result = SyncResult.retryable(error: error, stackTrace: stackTrace);
     }
 
     final finishedAt = _clock();
@@ -131,20 +143,11 @@ class SyncOrchestrator {
       return;
     }
 
-    if (result.skipped) {
-      await _stateStore.save(
-        _stateStore.getOrCreate(taskId).copyWith(
-              status: SyncTaskStatus.skipped,
-              lastFinishedAt: finishedAt,
-              clearNextRetryAt: true,
-            ),
-      );
-      return;
-    }
-
     final error =
         result.error ?? StateError('Task "$taskId" failed with unknown error.');
-    final delay = retryPolicy.nextDelay(attempt: attempt, error: error);
+    final delay = result.retryable
+        ? registration.task.policy.retry.nextDelay(attempt)
+        : null;
 
     if (delay != null) {
       final nextRetryAt = finishedAt.add(delay);
@@ -191,7 +194,7 @@ class SyncOrchestrator {
       ...taskPreconditions,
     ];
     for (final precondition in all) {
-      final result = await precondition.evaluate(context);
+      final result = await precondition.check(context);
       if (!result.isMet) {
         return _PreconditionFailure(
           name: precondition.name,
@@ -214,7 +217,7 @@ class _PreconditionFailure implements SyncPrecondition {
   final String? reason;
 
   @override
-  Future<PreconditionResult> evaluate(SyncContext context) {
+  Future<PreconditionResult> check(SyncContext context) {
     return Future<PreconditionResult>.value(
       PreconditionResult.unmet(reason: reason),
     );

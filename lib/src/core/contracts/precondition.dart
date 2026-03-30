@@ -5,7 +5,7 @@ import '../models/sync_context.dart';
 abstract interface class SyncPrecondition {
   String get name;
 
-  Future<PreconditionResult> evaluate(SyncContext context);
+  Future<PreconditionResult> check(SyncContext context);
 }
 
 @immutable
@@ -30,7 +30,7 @@ class PredicatePrecondition implements SyncPrecondition {
   final Future<bool> Function(SyncContext context) predicate;
 
   @override
-  Future<PreconditionResult> evaluate(SyncContext context) async {
+  Future<PreconditionResult> check(SyncContext context) async {
     final isMet = await predicate(context);
     if (isMet) {
       return PreconditionResult.met();
@@ -48,9 +48,9 @@ class CompositePrecondition implements SyncPrecondition {
   final List<SyncPrecondition> preconditions;
 
   @override
-  Future<PreconditionResult> evaluate(SyncContext context) async {
+  Future<PreconditionResult> check(SyncContext context) async {
     for (final precondition in preconditions) {
-      final result = await precondition.evaluate(context);
+      final result = await precondition.check(context);
       if (!result.isMet) {
         return PreconditionResult.unmet(
           reason: result.reason ?? '${precondition.name} is not met',

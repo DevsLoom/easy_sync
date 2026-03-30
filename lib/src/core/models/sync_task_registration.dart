@@ -8,5 +8,7 @@ class SyncTaskRegistration {
   });
 
   final SyncTask task;
+
+  // Optional extra preconditions layered on top of task-level preconditions.
   final List<SyncPrecondition> preconditions;
 }

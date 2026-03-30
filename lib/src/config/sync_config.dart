@@ -3,11 +3,11 @@ import '../core/core.dart';
 class SyncConfig {
   const SyncConfig({
     this.globalPreconditions = const <SyncPrecondition>[],
-    this.retryPolicy = const NoRetryPolicy(),
+    this.defaultPolicy = const SyncPolicy(),
     this.logger = const NoopSyncLogger(),
   });
 
   final List<SyncPrecondition> globalPreconditions;
-  final RetryPolicy retryPolicy;
+  final SyncPolicy defaultPolicy;
   final SyncLogger logger;
 }
