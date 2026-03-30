@@ -1,8 +1,7 @@
 enum SyncTaskStatus {
   idle,
   running,
-  succeeded,
+  success,
   failed,
-  skipped,
-  waitingRetry,
+  blocked,
 }

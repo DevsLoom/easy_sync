@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_sync/easy_sync.dart';
 import 'package:test/test.dart';
 
@@ -15,7 +17,7 @@ void main() {
       await orchestrator.syncManually();
 
       final state = store.getOrCreate('a');
-      expect(state.status, SyncTaskStatus.succeeded);
+      expect(state.status, SyncTaskStatus.success);
       expect(state.attempt, 0);
       expect(state.lastError, isNull);
     });
@@ -40,7 +42,7 @@ void main() {
       await orchestrator.syncOnAppOpen();
 
       final state = store.getOrCreate('a');
-      expect(state.status, SyncTaskStatus.skipped);
+      expect(state.status, SyncTaskStatus.blocked);
       expect(state.attempt, 0);
     });
 
@@ -64,10 +66,64 @@ void main() {
       await orchestrator.syncInBackground();
 
       final state = store.getOrCreate('a');
-      expect(state.status, SyncTaskStatus.waitingRetry);
+      expect(state.status, SyncTaskStatus.failed);
       expect(state.attempt, 1);
       expect(scheduled['a'], const Duration(seconds: 3));
       expect(state.nextRetryAt, isNotNull);
+    });
+  });
+
+  group('SyncEngine', () {
+    test('emits state updates while running task', () async {
+      final store = InMemorySyncTaskStateStore();
+      final engine = SyncEngine(
+        taskRegistrations: [
+          SyncTaskRegistration(task: _FakeTask.success(key: 'stream-task')),
+        ],
+        stateStore: store,
+      );
+
+      final updates = <SyncTaskStatus>[];
+      final subscription = engine.stateUpdates.listen((state) {
+        if (state.taskId == 'stream-task') {
+          updates.add(state.status);
+        }
+      });
+
+      await engine.runTask('stream-task');
+      await Future<void>.delayed(Duration.zero);
+      await subscription.cancel();
+
+      expect(updates, contains(SyncTaskStatus.running));
+      expect(updates, contains(SyncTaskStatus.success));
+    });
+
+    test('prevents duplicate execution for same task key', () async {
+      final store = InMemorySyncTaskStateStore();
+      final delayedHandler = _DelayedCountingHandler();
+      final engine = SyncEngine(
+        taskRegistrations: [
+          SyncTaskRegistration(
+            task: _TaskWithHandler(
+              key: 'single-flight',
+              handler: delayedHandler,
+            ),
+          ),
+        ],
+        stateStore: store,
+      );
+
+      final first = engine.runTask('single-flight');
+      final second = engine.runTask('single-flight');
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(delayedHandler.count, 1);
+
+      delayedHandler.complete();
+      await Future.wait(<Future<void>>[first, second]);
+
+      expect(delayedHandler.count, 1);
+      expect(store.getOrCreate('single-flight').status, SyncTaskStatus.success);
     });
   });
 }
@@ -109,4 +165,38 @@ class _FakeTaskHandler implements SyncTaskHandler {
 
   @override
   Future<SyncResult> execute(SyncContext context) async => _result;
+}
+
+class _TaskWithHandler implements SyncTask {
+  _TaskWithHandler({required this.key, required this.handler});
+
+  @override
+  final String key;
+
+  @override
+  final SyncTaskHandler handler;
+
+  @override
+  SyncPolicy get policy => const SyncPolicy();
+
+  @override
+  List<SyncPrecondition> get preconditions => const <SyncPrecondition>[];
+}
+
+class _DelayedCountingHandler implements SyncTaskHandler {
+  final Completer<void> _completer = Completer<void>();
+  int count = 0;
+
+  void complete() {
+    if (!_completer.isCompleted) {
+      _completer.complete();
+    }
+  }
+
+  @override
+  Future<SyncResult> execute(SyncContext context) async {
+    count += 1;
+    await _completer.future;
+    return SyncResult.success();
+  }
 }
