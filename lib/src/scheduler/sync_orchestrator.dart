@@ -1,11 +1,12 @@
 import '../core/core.dart';
 import 'sync_task_registration.dart';
 
-typedef RetryScheduleCallback = Future<void> Function({
-  required String taskId,
-  required Duration delay,
-  required Map<String, Object?> metadata,
-});
+typedef RetryScheduleCallback =
+    Future<void> Function({
+      required String taskId,
+      required Duration delay,
+      required Map<String, Object?> metadata,
+    });
 
 class SyncOrchestrator {
   SyncOrchestrator({
@@ -43,8 +44,15 @@ class SyncOrchestrator {
     return runAll(trigger: SyncTrigger.background, metadata: metadata);
   }
 
-  Future<void> retryTask(String taskId, {Map<String, Object?> metadata = const {}}) {
-    return _runTaskById(taskId: taskId, trigger: SyncTrigger.retry, metadata: metadata);
+  Future<void> retryTask(
+    String taskId, {
+    Map<String, Object?> metadata = const {},
+  }) {
+    return _runTaskById(
+      taskId: taskId,
+      trigger: SyncTrigger.retry,
+      metadata: metadata,
+    );
   }
 
   Future<void> runAll({
@@ -68,19 +76,25 @@ class SyncOrchestrator {
     }
 
     final now = _clock();
-    final context = SyncContext(trigger: trigger, timestamp: now, metadata: metadata);
+    final context = SyncContext(
+      trigger: trigger,
+      timestamp: now,
+      metadata: metadata,
+    );
 
     final unmet = await _firstUnmetPrecondition(
       context,
       taskPreconditions: registration.preconditions,
     );
     if (unmet != null) {
-      final skippedState = _stateStore.getOrCreate(taskId).copyWith(
-        status: SyncTaskStatus.skipped,
-        lastFinishedAt: now,
-        lastTrigger: trigger,
-        clearNextRetryAt: true,
-      );
+      final skippedState = _stateStore
+          .getOrCreate(taskId)
+          .copyWith(
+            status: SyncTaskStatus.skipped,
+            lastFinishedAt: now,
+            lastTrigger: trigger,
+            clearNextRetryAt: true,
+          );
       await _stateStore.save(skippedState);
       logger.info('Task "$taskId" skipped: ${unmet.reason ?? unmet.name}.');
       return;
@@ -110,40 +124,47 @@ class SyncOrchestrator {
 
     if (result.success) {
       await _stateStore.save(
-        _stateStore.getOrCreate(taskId).copyWith(
-          status: SyncTaskStatus.succeeded,
-          attempt: 0,
-          lastFinishedAt: finishedAt,
-          clearLastError: true,
-          clearNextRetryAt: true,
-        ),
+        _stateStore
+            .getOrCreate(taskId)
+            .copyWith(
+              status: SyncTaskStatus.succeeded,
+              attempt: 0,
+              lastFinishedAt: finishedAt,
+              clearLastError: true,
+              clearNextRetryAt: true,
+            ),
       );
       return;
     }
 
     if (result.skipped) {
       await _stateStore.save(
-        _stateStore.getOrCreate(taskId).copyWith(
-          status: SyncTaskStatus.skipped,
-          lastFinishedAt: finishedAt,
-          clearNextRetryAt: true,
-        ),
+        _stateStore
+            .getOrCreate(taskId)
+            .copyWith(
+              status: SyncTaskStatus.skipped,
+              lastFinishedAt: finishedAt,
+              clearNextRetryAt: true,
+            ),
       );
       return;
     }
 
-    final error = result.error ?? StateError('Task "$taskId" failed with unknown error.');
+    final error =
+        result.error ?? StateError('Task "$taskId" failed with unknown error.');
     final delay = retryPolicy.nextDelay(attempt: attempt, error: error);
 
     if (delay != null) {
       final nextRetryAt = finishedAt.add(delay);
       await _stateStore.save(
-        _stateStore.getOrCreate(taskId).copyWith(
-          status: SyncTaskStatus.waitingRetry,
-          lastError: error.toString(),
-          lastFinishedAt: finishedAt,
-          nextRetryAt: nextRetryAt,
-        ),
+        _stateStore
+            .getOrCreate(taskId)
+            .copyWith(
+              status: SyncTaskStatus.waitingRetry,
+              lastError: error.toString(),
+              lastFinishedAt: finishedAt,
+              nextRetryAt: nextRetryAt,
+            ),
       );
 
       if (onRetryScheduled != null) {
@@ -158,25 +179,36 @@ class SyncOrchestrator {
     }
 
     await _stateStore.save(
-      _stateStore.getOrCreate(taskId).copyWith(
-        status: SyncTaskStatus.failed,
-        lastError: error.toString(),
-        lastFinishedAt: finishedAt,
-        clearNextRetryAt: true,
-      ),
+      _stateStore
+          .getOrCreate(taskId)
+          .copyWith(
+            status: SyncTaskStatus.failed,
+            lastError: error.toString(),
+            lastFinishedAt: finishedAt,
+            clearNextRetryAt: true,
+          ),
     );
-    logger.error('Task "$taskId" failed and no retry will be attempted.', error: error);
+    logger.error(
+      'Task "$taskId" failed and no retry will be attempted.',
+      error: error,
+    );
   }
 
   Future<_PreconditionFailure?> _firstUnmetPrecondition(
     SyncContext context, {
     required List<SyncPrecondition> taskPreconditions,
   }) async {
-    final all = <SyncPrecondition>[...globalPreconditions, ...taskPreconditions];
+    final all = <SyncPrecondition>[
+      ...globalPreconditions,
+      ...taskPreconditions,
+    ];
     for (final precondition in all) {
       final result = await precondition.evaluate(context);
       if (!result.isMet) {
-        return _PreconditionFailure(name: precondition.name, reason: result.reason);
+        return _PreconditionFailure(
+          name: precondition.name,
+          reason: result.reason,
+        );
       }
     }
     return null;

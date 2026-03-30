@@ -17,10 +17,10 @@ class SyncTaskState {
   });
 
   factory SyncTaskState.initial(String taskId) => SyncTaskState(
-    taskId: taskId,
-    status: SyncTaskStatus.idle,
-    attempt: 0,
-  );
+        taskId: taskId,
+        status: SyncTaskStatus.idle,
+        attempt: 0,
+      );
 
   final String taskId;
   final SyncTaskStatus status;
