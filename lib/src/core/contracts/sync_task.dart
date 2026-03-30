@@ -1,5 +1,5 @@
-import 'sync_context.dart';
-import 'sync_task_result.dart';
+import '../models/sync_context.dart';
+import '../models/sync_task_result.dart';
 
 abstract interface class SyncTask {
   String get id;

@@ -1,9 +1,9 @@
 import 'package:workmanager/workmanager.dart';
 
-import '../../scheduler/background_scheduler.dart';
+import '../../scheduler/background/sync_background_scheduler.dart';
 
-typedef WorkmanagerSyncHandler =
-    Future<void> Function(String taskName, Map<String, dynamic>? inputData);
+typedef WorkmanagerSyncHandler = Future<void> Function(
+    String taskName, Map<String, dynamic>? inputData);
 
 class WorkmanagerSyncBridge {
   static WorkmanagerSyncHandler? _handler;
@@ -28,7 +28,7 @@ class WorkmanagerSyncBridge {
 
 class WorkmanagerBackgroundScheduler implements SyncBackgroundScheduler {
   WorkmanagerBackgroundScheduler({Workmanager? workmanager})
-    : _workmanager = workmanager ?? Workmanager();
+      : _workmanager = workmanager ?? Workmanager();
 
   final Workmanager _workmanager;
 

@@ -1,5 +1,5 @@
-import 'task_state.dart';
-import 'task_state_store.dart';
+import '../contracts/task_state_store.dart';
+import '../models/task_state.dart';
 
 class InMemorySyncTaskStateStore implements SyncTaskStateStore {
   final Map<String, SyncTaskState> _states = <String, SyncTaskState>{};

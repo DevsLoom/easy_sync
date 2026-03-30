@@ -1,4 +1,4 @@
-import 'task_state.dart';
+import '../models/task_state.dart';
 
 abstract interface class SyncTaskStateStore {
   SyncTaskState getOrCreate(String taskId);

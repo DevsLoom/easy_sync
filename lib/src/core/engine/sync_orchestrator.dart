@@ -1,12 +1,10 @@
-import '../core/core.dart';
-import 'sync_task_registration.dart';
+import '../core.dart';
 
-typedef RetryScheduleCallback =
-    Future<void> Function({
-      required String taskId,
-      required Duration delay,
-      required Map<String, Object?> metadata,
-    });
+typedef RetryScheduleCallback = Future<void> Function({
+  required String taskId,
+  required Duration delay,
+  required Map<String, Object?> metadata,
+});
 
 class SyncOrchestrator {
   SyncOrchestrator({
@@ -17,12 +15,12 @@ class SyncOrchestrator {
     this.logger = const NoopSyncLogger(),
     this.onRetryScheduled,
     DateTime Function()? clock,
-  }) : _stateStore = stateStore,
-       _clock = clock ?? DateTime.now,
-       _registrations = {
-         for (final registration in taskRegistrations)
-           registration.task.id: registration,
-       };
+  })  : _stateStore = stateStore,
+        _clock = clock ?? DateTime.now,
+        _registrations = {
+          for (final registration in taskRegistrations)
+            registration.task.id: registration,
+        };
 
   final Map<String, SyncTaskRegistration> _registrations;
   final SyncTaskStateStore _stateStore;
@@ -87,9 +85,7 @@ class SyncOrchestrator {
       taskPreconditions: registration.preconditions,
     );
     if (unmet != null) {
-      final skippedState = _stateStore
-          .getOrCreate(taskId)
-          .copyWith(
+      final skippedState = _stateStore.getOrCreate(taskId).copyWith(
             status: SyncTaskStatus.skipped,
             lastFinishedAt: now,
             lastTrigger: trigger,
@@ -124,9 +120,7 @@ class SyncOrchestrator {
 
     if (result.success) {
       await _stateStore.save(
-        _stateStore
-            .getOrCreate(taskId)
-            .copyWith(
+        _stateStore.getOrCreate(taskId).copyWith(
               status: SyncTaskStatus.succeeded,
               attempt: 0,
               lastFinishedAt: finishedAt,
@@ -139,9 +133,7 @@ class SyncOrchestrator {
 
     if (result.skipped) {
       await _stateStore.save(
-        _stateStore
-            .getOrCreate(taskId)
-            .copyWith(
+        _stateStore.getOrCreate(taskId).copyWith(
               status: SyncTaskStatus.skipped,
               lastFinishedAt: finishedAt,
               clearNextRetryAt: true,
@@ -157,9 +149,7 @@ class SyncOrchestrator {
     if (delay != null) {
       final nextRetryAt = finishedAt.add(delay);
       await _stateStore.save(
-        _stateStore
-            .getOrCreate(taskId)
-            .copyWith(
+        _stateStore.getOrCreate(taskId).copyWith(
               status: SyncTaskStatus.waitingRetry,
               lastError: error.toString(),
               lastFinishedAt: finishedAt,
@@ -179,9 +169,7 @@ class SyncOrchestrator {
     }
 
     await _stateStore.save(
-      _stateStore
-          .getOrCreate(taskId)
-          .copyWith(
+      _stateStore.getOrCreate(taskId).copyWith(
             status: SyncTaskStatus.failed,
             lastError: error.toString(),
             lastFinishedAt: finishedAt,

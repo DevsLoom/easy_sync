@@ -1,6 +1,6 @@
 import 'package:meta/meta.dart';
 
-import 'sync_context.dart';
+import '../models/sync_context.dart';
 
 abstract interface class SyncPrecondition {
   String get name;

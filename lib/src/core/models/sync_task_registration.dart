@@ -1,4 +1,5 @@
-import '../core/core.dart';
+import '../contracts/precondition.dart';
+import '../contracts/sync_task.dart';
 
 class SyncTaskRegistration {
   const SyncTaskRegistration({
