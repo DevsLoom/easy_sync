@@ -195,7 +195,7 @@ class SyncOrchestrator {
     ];
     for (final precondition in all) {
       final result = await precondition.check(context);
-      if (!result.isMet) {
+      if (result.blocked) {
         return _PreconditionFailure(
           name: precondition.name,
           reason: result.reason,
@@ -219,7 +219,7 @@ class _PreconditionFailure implements SyncPrecondition {
   @override
   Future<PreconditionResult> check(SyncContext context) {
     return Future<PreconditionResult>.value(
-      PreconditionResult.unmet(reason: reason),
+      PreconditionResult.blocked(reason: reason),
     );
   }
 }

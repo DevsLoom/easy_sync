@@ -1,6 +1,7 @@
 export 'contracts/logger.dart';
 export 'contracts/precondition.dart';
 export 'contracts/retry_policy.dart';
+export 'contracts/requires_network_precondition.dart';
 export 'contracts/sync_task.dart';
 export 'contracts/sync_task_handler.dart';
 export 'contracts/task_state_store.dart';

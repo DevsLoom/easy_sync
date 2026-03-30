@@ -10,15 +10,23 @@ abstract interface class SyncPrecondition {
 
 @immutable
 class PreconditionResult {
-  const PreconditionResult._({required this.isMet, this.reason});
+  const PreconditionResult._({required this.allow, this.reason});
 
-  factory PreconditionResult.met() => const PreconditionResult._(isMet: true);
+  factory PreconditionResult.allow() => const PreconditionResult._(allow: true);
 
-  factory PreconditionResult.unmet({String? reason}) =>
-      PreconditionResult._(isMet: false, reason: reason);
+  factory PreconditionResult.blocked({String? reason}) =>
+      PreconditionResult._(allow: false, reason: reason);
 
-  final bool isMet;
+  final bool allow;
   final String? reason;
+
+  bool get blocked => !allow;
+
+  @Deprecated('Use allow instead.')
+  bool get isMet => allow;
+
+  @Deprecated('Use blocked instead.')
+  bool get isUnmet => blocked;
 }
 
 class PredicatePrecondition implements SyncPrecondition {
@@ -33,9 +41,9 @@ class PredicatePrecondition implements SyncPrecondition {
   Future<PreconditionResult> check(SyncContext context) async {
     final isMet = await predicate(context);
     if (isMet) {
-      return PreconditionResult.met();
+      return PreconditionResult.allow();
     }
-    return PreconditionResult.unmet(reason: '$name is not met');
+    return PreconditionResult.blocked(reason: '$name is not met');
   }
 }
 
@@ -51,12 +59,12 @@ class CompositePrecondition implements SyncPrecondition {
   Future<PreconditionResult> check(SyncContext context) async {
     for (final precondition in preconditions) {
       final result = await precondition.check(context);
-      if (!result.isMet) {
-        return PreconditionResult.unmet(
+      if (result.blocked) {
+        return PreconditionResult.blocked(
           reason: result.reason ?? '${precondition.name} is not met',
         );
       }
     }
-    return PreconditionResult.met();
+    return PreconditionResult.allow();
   }
 }
