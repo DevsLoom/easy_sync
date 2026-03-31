@@ -1,6 +1,6 @@
 name: easy_sync
 description: Flutter background sync and offline-first sync orchestration with Workmanager, retry, preconditions, rate limiting, and circuit breaker controls.
-version: 0.2.0
+version: 0.2.1
 homepage: https://github.com/DevsLoom/easy_sync
 repository: https://github.com/DevsLoom/easy_sync
 issue_tracker: https://github.com/DevsLoom/easy_sync/issues

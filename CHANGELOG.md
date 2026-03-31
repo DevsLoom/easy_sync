@@ -1,3 +1,11 @@
+## 0.2.1
+
+### Changed
+
+- Refined README tone for clearer onboarding and practical usage flow.
+- Improved README SEO coverage with stronger keyword intent and use-case framing.
+- Updated package metadata description for better discoverability on pub.dev.
+
 ## 0.2.0
 
 ### Added
