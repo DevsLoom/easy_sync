@@ -10,10 +10,6 @@ Future<void> main() async {
     appOpenSync: true,
     background: EasySyncBackgroundConfig.enabled(
       frequency: const Duration(hours: 1),
-      inputData: const <String, dynamic>{
-        'source': 'example_periodic',
-        'hasNetwork': true,
-      },
     ),
     taskTimeout: const Duration(seconds: 20),
     isolateTaskFailures: true,

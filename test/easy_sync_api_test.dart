@@ -5,6 +5,10 @@ import 'package:flutter/widgets.dart';
 import 'package:test/test.dart';
 
 void main() {
+  tearDown(() {
+    WorkmanagerSyncBridge.clearTaskMappings();
+  });
+
   group('EasySync', () {
     test('runTask executes a task manually and returns final state', () async {
       final task = _TestTask(
@@ -84,28 +88,19 @@ void main() {
       final easySync = await EasySync.setup(
         tasks: [task],
         appOpenSync: true,
-        background: EasySyncBackgroundConfig.enabled(
+        background: EasySyncBackgroundConfig.periodic(
+          uniqueName: EasySync.defaultBackgroundUniqueName,
+          taskName: EasySync.defaultBackgroundTaskName,
           frequency: const Duration(hours: 1),
-          inputData: const <String, dynamic>{'source': 'periodic'},
           driver: EasySyncBackgroundDriver(
             scheduler: backgroundScheduler,
             initialize: backgroundScheduler.initialize,
           ),
         ),
+        debugMode: false,
       );
 
       expect(task.count, 1);
-      expect(backgroundScheduler.initializeCount, 1);
-      expect(
-        backgroundScheduler.scheduledUniqueName,
-        EasySync.defaultBackgroundUniqueName,
-      );
-      expect(
-        backgroundScheduler.scheduledTaskName,
-        EasySync.defaultBackgroundTaskName,
-      );
-      expect(backgroundScheduler.scheduledFrequency, const Duration(hours: 1));
-
       final ok = await WorkmanagerSyncBridge.executeTask(
         EasySync.defaultBackgroundTaskName,
         const <String, dynamic>{'source': 'periodic'},
@@ -123,8 +118,42 @@ void main() {
       expect(missing, isFalse);
     });
 
+    test('disabled background skips automatic background setup', () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      final easySync = await EasySync.setup(
+        tasks: [
+          _TestTask(
+            key: 'disabled-background-task',
+            policy: const SyncPolicy(background: true),
+          ),
+        ],
+        background: EasySyncBackgroundConfig.disabled(),
+      );
+
+      final ok = await WorkmanagerSyncBridge.executeTask(
+        EasySync.defaultBackgroundTaskName,
+        null,
+      );
+
+      expect(ok, isFalse);
+
+      await easySync.dispose();
+    });
+
     test(
       'enabled background normalizes frequency to workmanager minimum',
+      () async {
+        final config = EasySyncBackgroundConfig.enabled(
+          frequency: const Duration(minutes: 5),
+        );
+
+        expect(config.frequency, EasySync.minimumBackgroundFrequency);
+      },
+    );
+
+    test(
+      'advanced periodic config still allows custom scheduling values',
       () async {
         WidgetsFlutterBinding.ensureInitialized();
 
@@ -133,12 +162,15 @@ void main() {
         final easySync = await EasySync.setup(
           tasks: [
             _TestTask(
-              key: 'minimum-frequency-task',
+              key: 'advanced-background-task',
               policy: const SyncPolicy(background: true),
             ),
           ],
-          background: EasySyncBackgroundConfig.enabled(
-            frequency: const Duration(minutes: 5),
+          background: EasySyncBackgroundConfig.periodic(
+            uniqueName: 'custom-unique',
+            taskName: 'custom-task',
+            frequency: const Duration(hours: 2),
+            inputData: const <String, dynamic>{'source': 'advanced'},
             driver: EasySyncBackgroundDriver(
               scheduler: backgroundScheduler,
               initialize: backgroundScheduler.initialize,
@@ -146,9 +178,12 @@ void main() {
           ),
         );
 
+        expect(backgroundScheduler.initializeCount, 1);
+        expect(backgroundScheduler.scheduledUniqueName, 'custom-unique');
+        expect(backgroundScheduler.scheduledTaskName, 'custom-task');
         expect(
           backgroundScheduler.scheduledFrequency,
-          EasySync.minimumBackgroundFrequency,
+          const Duration(hours: 2),
         );
 
         await easySync.dispose();

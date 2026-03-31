@@ -23,20 +23,29 @@ class EasySyncBackgroundDriver {
 
 class EasySyncBackgroundConfig {
   EasySyncBackgroundConfig.enabled({
-    Duration frequency = EasySync.minimumBackgroundFrequency,
-    Map<String, dynamic> inputData = const <String, dynamic>{},
-    Duration? initialDelay,
-    SyncTaskStateStoreFactory? stateStoreFactory,
-    EasySyncBackgroundDriver? driver,
+    Duration frequency = EasySync.defaultBackgroundFrequency,
   }) : this._(
+         isEnabled: true,
          uniqueName: EasySync.defaultBackgroundUniqueName,
          taskName: EasySync.defaultBackgroundTaskName,
          frequency: _normalizeFrequency(frequency),
-         inputData: inputData,
-         initialDelay: initialDelay,
-         stateStoreFactory: stateStoreFactory,
-         driver: driver ?? EasySyncBackgroundDriver.workmanager(),
+         inputData: EasySync.defaultBackgroundInputData,
+         initialDelay: null,
+         stateStoreFactory: null,
+         driver: EasySyncBackgroundDriver.workmanager(),
        );
+
+  EasySyncBackgroundConfig.disabled()
+    : this._(
+        isEnabled: false,
+        uniqueName: EasySync.defaultBackgroundUniqueName,
+        taskName: EasySync.defaultBackgroundTaskName,
+        frequency: EasySync.defaultBackgroundFrequency,
+        inputData: const <String, dynamic>{},
+        initialDelay: null,
+        stateStoreFactory: null,
+        driver: null,
+      );
 
   EasySyncBackgroundConfig.periodic({
     required this.uniqueName,
@@ -46,10 +55,12 @@ class EasySyncBackgroundConfig {
     this.initialDelay,
     this.stateStoreFactory,
     EasySyncBackgroundDriver? driver,
-  }) : driver = driver ?? EasySyncBackgroundDriver.workmanager(),
+  }) : isEnabled = true,
+       driver = driver ?? EasySyncBackgroundDriver.workmanager(),
        frequency = _normalizeFrequency(frequency);
 
   const EasySyncBackgroundConfig._({
+    required this.isEnabled,
     required this.uniqueName,
     required this.taskName,
     required this.frequency,
@@ -59,13 +70,14 @@ class EasySyncBackgroundConfig {
     required this.driver,
   });
 
+  final bool isEnabled;
   final String uniqueName;
   final String taskName;
   final Duration frequency;
   final Map<String, dynamic> inputData;
   final Duration? initialDelay;
   final SyncTaskStateStoreFactory? stateStoreFactory;
-  final EasySyncBackgroundDriver driver;
+  final EasySyncBackgroundDriver? driver;
 
   static Duration _normalizeFrequency(Duration frequency) {
     if (frequency < EasySync.minimumBackgroundFrequency) {
@@ -80,35 +92,29 @@ class EasySync {
       'easy_sync.background.periodic';
   static const String defaultBackgroundUniqueName =
       'easy_sync.background.periodic.default';
+  static const Duration defaultBackgroundFrequency = Duration(hours: 1);
   static const Duration minimumBackgroundFrequency = Duration(minutes: 15);
+  static const Map<String, dynamic> defaultBackgroundInputData =
+      <String, dynamic>{'source': 'easy_sync.background.periodic'};
 
   static Future<EasySync> setup({
     required List<SyncTask> tasks,
     bool appOpenSync = false,
     EasySyncBackgroundConfig? background,
-    SyncTaskStateStore? stateStore,
-    List<SyncPrecondition> globalPreconditions = const <SyncPrecondition>[],
-    SyncLogger logger = const NoopSyncLogger(),
-    RetryScheduleCallback? onRetryScheduled,
     Duration? taskTimeout,
     bool debugMode = false,
     bool isolateTaskFailures = true,
-    DateTime Function()? clock,
   }) async {
     final taskRegistrations = <SyncTaskRegistration>[
       for (final task in tasks) SyncTaskRegistration(task: task),
     ];
-    final resolvedStateStore = stateStore ?? InMemorySyncTaskStateStore();
+    final resolvedStateStore = InMemorySyncTaskStateStore();
     final engine = SyncEngine(
       taskRegistrations: taskRegistrations,
       stateStore: resolvedStateStore,
-      globalPreconditions: globalPreconditions,
-      logger: logger,
-      onRetryScheduled: onRetryScheduled,
       taskTimeout: taskTimeout,
       debugMode: debugMode,
       isolateTaskFailures: isolateTaskFailures,
-      clock: clock,
     );
 
     final appOpenScheduler = appOpenSync ? AppOpenSyncScheduler(engine) : null;
@@ -117,30 +123,30 @@ class EasySync {
       stateStore: resolvedStateStore,
       engine: engine,
       appOpenScheduler: appOpenScheduler,
-      backgroundTaskName: background?.taskName,
+      backgroundTaskName: background != null && background.isEnabled
+          ? background.taskName
+          : null,
     );
 
     if (appOpenScheduler != null) {
       await appOpenScheduler.start();
     }
 
-    if (background != null) {
+    if (background != null && background.isEnabled) {
+      final driver = background.driver!;
+
       WorkmanagerSyncBridge.registerTaskMapping(
         taskName: background.taskName,
         taskRegistrations: taskRegistrations,
         stateStoreFactory:
             background.stateStoreFactory ?? InMemorySyncTaskStateStore.new,
-        globalPreconditions: globalPreconditions,
-        logger: logger,
-        onRetryScheduled: onRetryScheduled,
         taskTimeout: taskTimeout,
         debugMode: debugMode,
         isolateTaskFailures: isolateTaskFailures,
-        clock: clock,
       );
 
-      await background.driver.initialize();
-      await background.driver.scheduler.schedulePeriodic(
+      await driver.initialize();
+      await driver.scheduler.schedulePeriodic(
         uniqueName: background.uniqueName,
         taskName: background.taskName,
         frequency: background.frequency,

@@ -209,10 +209,6 @@ Future<void> example() async {
     appOpenSync: true,
     background: EasySyncBackgroundConfig.enabled(
       frequency: const Duration(hours: 1),
-      inputData: const <String, dynamic>{
-        'source': 'periodic',
-        'hasNetwork': true,
-      },
     ),
     taskTimeout: const Duration(seconds: 20),
     isolateTaskFailures: true,
@@ -275,10 +271,6 @@ Future<void> main() async {
     // 3) Enable background sync with the common configuration path.
     background: EasySyncBackgroundConfig.enabled(
       frequency: const Duration(hours: 1),
-      inputData: const <String, dynamic>{
-        'source': 'periodic',
-        'hasNetwork': true,
-      },
     ),
     // 4) Optional execution safety settings.
     taskTimeout: const Duration(seconds: 20),
@@ -434,18 +426,25 @@ final easySync = await EasySync.setup(
   tasks: tasks,
   background: EasySyncBackgroundConfig.enabled(
     frequency: const Duration(hours: 1),
-    inputData: const <String, dynamic>{
-      'source': 'periodic',
-      'hasNetwork': true,
-    },
-  );
+  ),
+);
+```
+
+To explicitly disable background scheduling while keeping the rest of `setup()` the same:
+
+```dart
+final easySync = await EasySync.setup(
+  tasks: tasks,
+  background: EasySyncBackgroundConfig.disabled(),
+);
 ```
 
 Keep in mind:
 - Android uses WorkManager semantics.
 - iOS uses BGTaskScheduler semantics via `workmanager`.
-- background timing is not guaranteed
 - Android periodic work has a practical 15 minute minimum interval behavior.
+- If you pass less than 15 minutes, `easy_sync` clamps it to 15 minutes.
+- background timing is not guaranteed
 - iOS background timing is especially best-effort
 
 ## Advanced Usage
@@ -498,6 +497,7 @@ await scheduler.schedulePeriodic(
 Use `EasySyncBackgroundConfig.periodic(...)` when you need to customize values such as:
 - `uniqueName`
 - `taskName`
+- `inputData`
 - `stateStoreFactory`
 - `initialDelay`
 - custom scheduler driver for advanced integrations or testing
@@ -615,7 +615,7 @@ Does `easy_sync` include authentication?
 Does `easy_sync` include API client or database code?
 - No. It is backend-agnostic and database-agnostic.
 
-Where should I call `EasySync.initialize()`?
+Where should I call `EasySync.setup()`?
 - Near app startup, usually in `main()` before `runApp()`.
 
 Where should I configure background sync?
