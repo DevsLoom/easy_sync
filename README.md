@@ -34,178 +34,43 @@ Then install dependencies:
 flutter pub get
 ```
 
-If you use background sync, also complete the native platform setup required by `workmanager` for Android and iOS.
-
-### Native Setup For Background Sync
-
-Use these steps before enabling background sync through `EasySync.setup(...)`.
-
-#### Android
-
-Android setup is the simple part.
-
-1. Add `easy_sync` to your app.
-2. Run `flutter pub get`.
-3. Make sure your app uses Flutter's default generated Android setup.
-4. No extra Android manifest or Application class setup is usually needed for basic workmanager usage.
-
-In most apps, Android works after Dart-side initialization only.
-
-#### iOS
-
-iOS needs explicit native setup.
-
-1. Open `ios/Runner.xcworkspace` in Xcode.
-2. Select the `Runner` target.
-3. Set the minimum deployment target to iOS 14.0 or later.
-4. Open `Signing & Capabilities`.
-5. Add `Background Modes`.
-6. Enable the background mode that matches your scheduling approach.
-
-For periodic background sync with workmanager, use BGTaskScheduler-style setup:
-
-Add these keys in `ios/Runner/Info.plist`:
-
-```xml
-<key>UIBackgroundModes</key>
-<array>
-    <string>processing</string>
-</array>
-
-<key>BGTaskSchedulerPermittedIdentifiers</key>
-<array>
-  <!-- Example: if your app id is ca.devsloom.testapp -->
-  <string>ca.devsloom.testapp.sync-background</string>
-</array>
-```
-
-Then register the same identifier in `ios/Runner/AppDelegate.swift`:
-
-```swift
-import UIKit
-import Flutter
-import workmanager_apple
-
-@main
-@objc class AppDelegate: FlutterAppDelegate {
-  override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    // Use your own app's bundle-style identifier here.
-    // Example:
-    // if your app id is ca.devsloom.testapp
-    // then use ca.devsloom.testapp.sync-background
-    WorkmanagerPlugin.registerPeriodicTask(
-      withIdentifier: "ca.devsloom.testapp.sync-background",
-      frequency: NSNumber(value: 20 * 60)
-    )
-
-    GeneratedPluginRegistrant.register(with: self)
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-}
-```
-
-Keep these rules in mind:
-- Use the same identifier in `Info.plist` and `AppDelegate.swift`.
-- A safe pattern is: `<your-app-id>.sync-background`.
-- iOS background execution is best-effort.
-- Exact timing is not guaranteed.
-- Real devices are more reliable than simulators for background testing.
-
-If you want the most up-to-date native details, check the `workmanager` quick start as well, because platform requirements can change between plugin versions.
+If you enable background sync, complete the platform setup in the `Native Setup For Background Sync` section below.
 
 ## Quick Start
 
-Start with one task and let `EasySync.setup()` handle the common integration path.
+Set up `easy_sync` with a minimal task:
 
 ```dart
 import 'package:easy_sync/easy_sync.dart';
 
-class UploadPendingItemsTask implements SyncTask {
-  UploadPendingItemsTask({
-    required this.upload,
-    required this.readAccessToken,
-  });
-
-  final Future<void> Function() upload;
-  final Future<String?> Function() readAccessToken;
+class SimpleSyncTask implements SyncTask {
 
   @override
-  String get key => 'upload_pending_items';
+  String get key => 'simple';
 
   @override
   SyncPolicy get policy => const SyncPolicy(
-        appOpen: true,
         manual: true,
-        background: true,
-        retry: RetryConfig.exponential(
-          initialDelay: Duration(seconds: 1),
-          maxRetries: 4,
-        ),
       );
 
   @override
-  List<SyncPrecondition> get preconditions => <SyncPrecondition>[
-        RequiresNetworkPrecondition(
-          checker: (context) async => context.value<bool>('hasNetwork') ?? false,
-        ),
-        _AuthReadyPrecondition(readAccessToken: readAccessToken),
-      ];
+  List<SyncPrecondition> get preconditions => [];
 
   @override
-  SyncTaskHandler get handler => _UploadPendingItemsHandler(upload: upload);
+  SyncTaskHandler get handler => _SimpleSyncHandler();
 }
 
-class _UploadPendingItemsHandler implements SyncTaskHandler {
-  _UploadPendingItemsHandler({required this.upload});
-
-  final Future<void> Function() upload;
+class _SimpleSyncHandler implements SyncTaskHandler {
 
   @override
   Future<SyncResult> execute(SyncContext context) async {
-    try {
-      await upload();
-      return SyncResult.success();
-    } catch (error, stackTrace) {
-      // Mark transient failures as retryable.
-      return SyncResult.retryable(error: error, stackTrace: stackTrace);
-    }
-  }
-}
-
-class _AuthReadyPrecondition implements SyncPrecondition {
-  _AuthReadyPrecondition({required this.readAccessToken});
-
-  final Future<String?> Function() readAccessToken;
-
-  @override
-  String get name => 'auth-ready';
-
-  @override
-  Future<PreconditionResult> check(SyncContext context) async {
-    final token = await readAccessToken();
-    if (token == null) {
-      return PreconditionResult.blocked(reason: 'Missing access token');
-    }
-    return PreconditionResult.allow();
+    return SyncResult.success();
   }
 }
 
 Future<void> example() async {
   final easySync = await EasySync.setup(
-    tasks: <SyncTask>[
-      UploadPendingItemsTask(
-        upload: () async {
-          // Call your own repository or API layer here.
-        },
-        readAccessToken: () async {
-          // Read from your own auth or secure storage layer.
-          return 'token';
-        },
-      ),
-    ],
+    tasks: <SyncTask>[SimpleSyncTask()],
     appOpenSync: true,
     background: EasySyncBackgroundConfig.enabled(
       frequency: const Duration(hours: 1),
@@ -231,11 +96,11 @@ See the Full Example below for a production-ready setup with retry handling, pre
 
 Follow this simple flow in your app:
 
-1. Define your `SyncTask` classes.
-2. Call `EasySync.setup(...)` during app startup (usually in `main()`).
-3. Pass the returned `EasySync` instance into your app.
-4. Trigger manual sync from the UI when needed (`runAll()` / `runTask()`).
-5. Let `easy_sync` handle app-open and background sync automatically.
+1. Define your `SyncTask` classes
+2. Call `EasySync.setup(...)` during app startup (usually in `main()`)
+3. Pass the returned `EasySync` instance into your app
+4. Trigger manual sync from the UI when needed (`runAll()` / `runTask()`)
+5. Let `easy_sync` handle app-open and background sync automatically
 
 ## Full Example (main.dart)
 
@@ -442,6 +307,86 @@ Keep in mind:
 - background timing is not guaranteed
 - iOS background timing is especially best-effort
 
+## Native Setup For Background Sync
+
+Use these steps before enabling background sync through `EasySync.setup(...)`.
+
+### Android
+
+Android setup is the simple part.
+
+1. Add `easy_sync` to your app.
+2. Run `flutter pub get`.
+3. Make sure your app uses Flutter's default generated Android setup.
+4. No extra Android manifest or Application class setup is usually needed for basic workmanager usage.
+
+In most apps, Android works after Dart-side initialization only.
+
+### iOS
+
+iOS needs explicit native setup.
+
+1. Open `ios/Runner.xcworkspace` in Xcode.
+2. Select the `Runner` target.
+3. Set the minimum deployment target to iOS 14.0 or later.
+4. Open `Signing & Capabilities`.
+5. Add `Background Modes`.
+6. Enable the background mode that matches your scheduling approach.
+
+For periodic background sync with workmanager, use BGTaskScheduler-style setup:
+
+Add these keys in `ios/Runner/Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>processing</string>
+</array>
+
+<key>BGTaskSchedulerPermittedIdentifiers</key>
+<array>
+  <!-- Example: if your app id is ca.devsloom.testapp -->
+  <string>ca.devsloom.testapp.sync-background</string>
+</array>
+```
+
+Then register the same identifier in `ios/Runner/AppDelegate.swift`:
+
+```swift
+import UIKit
+import Flutter
+import workmanager_apple
+
+@main
+@objc class AppDelegate: FlutterAppDelegate {
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    // Use your own app's bundle-style identifier here.
+    // Example:
+    // if your app id is ca.devsloom.testapp
+    // then use ca.devsloom.testapp.sync-background
+    WorkmanagerPlugin.registerPeriodicTask(
+      withIdentifier: "ca.devsloom.testapp.sync-background",
+      frequency: NSNumber(value: 20 * 60)
+    )
+
+    GeneratedPluginRegistrant.register(with: self)
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+}
+```
+
+Keep these rules in mind:
+- Use the same identifier in `Info.plist` and `AppDelegate.swift`.
+- A safe pattern is: `<your-app-id>.sync-background`.
+- iOS background execution is best-effort.
+- Exact timing is not guaranteed.
+- Real devices are more reliable than simulators for background testing.
+
+If you want the most up-to-date native details, check the `workmanager` quick start as well, because platform requirements can change between plugin versions.
+
 ## Advanced Usage
 
 The high-level `EasySync.setup()` API is meant for the common integration path.
@@ -617,4 +562,4 @@ Where should I configure background sync?
 - During app startup, before scheduling periodic work.
 
 When should I trigger app-open sync?
-- In `initState()` for the first app load and again when the app resumes.
+- Set `appOpenSync: true` in `EasySync.setup()` for the common case.
