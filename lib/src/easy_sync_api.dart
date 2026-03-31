@@ -1,6 +1,120 @@
+import 'adapters/workmanager/workmanager_adapter.dart';
 import 'core/core.dart';
+import 'scheduler/app_open/app_open_sync_scheduler.dart';
+import 'scheduler/background/sync_background_scheduler.dart';
+
+class EasySyncBackgroundDriver {
+  EasySyncBackgroundDriver({required this.scheduler, required this.initialize});
+
+  factory EasySyncBackgroundDriver.workmanager({
+    WorkmanagerBackgroundScheduler? scheduler,
+  }) {
+    final resolvedScheduler = scheduler ?? WorkmanagerBackgroundScheduler();
+
+    return EasySyncBackgroundDriver(
+      scheduler: resolvedScheduler,
+      initialize: resolvedScheduler.initialize,
+    );
+  }
+
+  final SyncBackgroundScheduler scheduler;
+  final Future<void> Function() initialize;
+}
+
+class EasySyncBackgroundConfig {
+  EasySyncBackgroundConfig.periodic({
+    required this.uniqueName,
+    required this.frequency,
+    this.taskName = EasySync.defaultBackgroundTaskName,
+    this.inputData = const <String, dynamic>{},
+    this.initialDelay,
+    this.stateStoreFactory,
+    EasySyncBackgroundDriver? driver,
+  }) : driver = driver ?? EasySyncBackgroundDriver.workmanager();
+
+  final String uniqueName;
+  final String taskName;
+  final Duration frequency;
+  final Map<String, dynamic> inputData;
+  final Duration? initialDelay;
+  final SyncTaskStateStoreFactory? stateStoreFactory;
+  final EasySyncBackgroundDriver driver;
+}
 
 class EasySync {
+  static const String defaultBackgroundTaskName =
+      'easy_sync.background.periodic';
+
+  static Future<EasySync> setup({
+    required List<SyncTask> tasks,
+    bool appOpenSync = false,
+    EasySyncBackgroundConfig? background,
+    SyncTaskStateStore? stateStore,
+    List<SyncPrecondition> globalPreconditions = const <SyncPrecondition>[],
+    SyncLogger logger = const NoopSyncLogger(),
+    RetryScheduleCallback? onRetryScheduled,
+    Duration? taskTimeout,
+    bool debugMode = false,
+    bool isolateTaskFailures = true,
+    DateTime Function()? clock,
+  }) async {
+    final taskRegistrations = <SyncTaskRegistration>[
+      for (final task in tasks) SyncTaskRegistration(task: task),
+    ];
+    final resolvedStateStore = stateStore ?? InMemorySyncTaskStateStore();
+    final engine = SyncEngine(
+      taskRegistrations: taskRegistrations,
+      stateStore: resolvedStateStore,
+      globalPreconditions: globalPreconditions,
+      logger: logger,
+      onRetryScheduled: onRetryScheduled,
+      taskTimeout: taskTimeout,
+      debugMode: debugMode,
+      isolateTaskFailures: isolateTaskFailures,
+      clock: clock,
+    );
+
+    final appOpenScheduler = appOpenSync ? AppOpenSyncScheduler(engine) : null;
+    final easySync = EasySync._internal(
+      taskRegistrations: taskRegistrations,
+      stateStore: resolvedStateStore,
+      engine: engine,
+      appOpenScheduler: appOpenScheduler,
+      backgroundTaskName: background?.taskName,
+    );
+
+    if (appOpenScheduler != null) {
+      await appOpenScheduler.start();
+    }
+
+    if (background != null) {
+      WorkmanagerSyncBridge.registerTaskMapping(
+        taskName: background.taskName,
+        taskRegistrations: taskRegistrations,
+        stateStoreFactory:
+            background.stateStoreFactory ?? InMemorySyncTaskStateStore.new,
+        globalPreconditions: globalPreconditions,
+        logger: logger,
+        onRetryScheduled: onRetryScheduled,
+        taskTimeout: taskTimeout,
+        debugMode: debugMode,
+        isolateTaskFailures: isolateTaskFailures,
+        clock: clock,
+      );
+
+      await background.driver.initialize();
+      await background.driver.scheduler.schedulePeriodic(
+        uniqueName: background.uniqueName,
+        taskName: background.taskName,
+        frequency: background.frequency,
+        inputData: background.inputData,
+        initialDelay: background.initialDelay,
+      );
+    }
+
+    return easySync;
+  }
+
   factory EasySync.initialize({
     required List<SyncTask> tasks,
     SyncTaskStateStore? stateStore,
@@ -49,11 +163,27 @@ class EasySync {
          debugMode: debugMode,
          isolateTaskFailures: isolateTaskFailures,
          clock: clock,
-       );
+       ),
+       _appOpenScheduler = null,
+       _backgroundTaskName = null;
+
+  EasySync._internal({
+    required List<SyncTaskRegistration> taskRegistrations,
+    required SyncTaskStateStore stateStore,
+    required SyncEngine engine,
+    AppOpenSyncScheduler? appOpenScheduler,
+    String? backgroundTaskName,
+  }) : _stateStore = stateStore,
+       _taskRegistrations = taskRegistrations,
+       _engine = engine,
+       _appOpenScheduler = appOpenScheduler,
+       _backgroundTaskName = backgroundTaskName;
 
   final SyncTaskStateStore _stateStore;
   final List<SyncTaskRegistration> _taskRegistrations;
   final SyncEngine _engine;
+  final AppOpenSyncScheduler? _appOpenScheduler;
+  final String? _backgroundTaskName;
 
   Stream<SyncTaskState> get stateStream => _engine.stateUpdates;
 
@@ -90,5 +220,14 @@ class EasySync {
         .toList();
   }
 
-  Future<void> dispose() => _engine.dispose();
+  Future<void> dispose() async {
+    _appOpenScheduler?.stop();
+
+    final backgroundTaskName = _backgroundTaskName;
+    if (backgroundTaskName != null) {
+      WorkmanagerSyncBridge.unregisterTaskMapping(backgroundTaskName);
+    }
+
+    await _engine.dispose();
+  }
 }

@@ -112,7 +112,7 @@ If you want the most up-to-date native details, check the `workmanager` quick st
 
 ## Quick Start
 
-Start with one task and trigger it manually.
+Start with one task and let `EasySync.setup()` handle the common integration path.
 
 ```dart
 import 'package:easy_sync/easy_sync.dart';
@@ -188,7 +188,7 @@ class _AuthReadyPrecondition implements SyncPrecondition {
 }
 
 Future<void> example() async {
-  final easySync = EasySync.initialize(
+  final easySync = await EasySync.setup(
     tasks: <SyncTask>[
       UploadPendingItemsTask(
         upload: () async {
@@ -200,6 +200,15 @@ Future<void> example() async {
         },
       ),
     ],
+    appOpenSync: true,
+    background: EasySyncBackgroundConfig.periodic(
+      uniqueName: 'easy-sync-periodic',
+      frequency: const Duration(hours: 1),
+      inputData: const <String, dynamic>{
+        'source': 'periodic',
+        'hasNetwork': true,
+      },
+    ),
     taskTimeout: const Duration(seconds: 20),
     isolateTaskFailures: true,
   );
@@ -220,17 +229,17 @@ Future<void> example() async {
 Use this order in a real Flutter app:
 
 1. Define your `SyncTask` implementations.
-2. Initialize `EasySync` near app startup.
-3. Register background task mappings with `WorkmanagerSyncBridge.registerTaskMapping()`.
-4. Initialize `WorkmanagerBackgroundScheduler()`.
-5. Schedule a periodic background job.
-6. Trigger app-open sync on first load and on app resume.
-7. Use manual sync from pull-to-refresh, buttons, or settings screens.
+2. Call `await EasySync.setup(...)` near app startup.
+3. Let `EasySync.setup(...)` create task registrations and the default state store.
+4. Let `EasySync.setup(...)` register the background task mapping.
+5. Let `EasySync.setup(...)` initialize the scheduler and schedule the periodic job.
+6. Let `EasySync.setup(...)` automatically start app-open sync if `appOpenSync: true`.
+7. Use `runAll()` or `runTask()` for manual sync from the UI.
 
 A good mental model is:
-- `EasySync.initialize()` is for manual sync APIs and state streaming.
-- `WorkmanagerSyncBridge.registerTaskMapping()` connects workmanager callbacks to your tasks.
-- app-open sync is usually triggered from app lifecycle code.
+- `EasySync.setup()` is the main onboarding path.
+- `EasySync.initialize()` and the lower-level APIs remain available for advanced use cases.
+- You only need the lower-level APIs when the default setup flow is not enough.
 
 ## Full Example (main.dart)
 
@@ -243,130 +252,44 @@ import 'package:easy_sync/easy_sync.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1) Define all sync tasks in one place.
-  final tasks = <SyncTask>[
+  // 1) Define your app tasks.
+  final easySync = await EasySync.setup(
     UploadPendingItemsTask(
-      upload: () async {
-        // Call your repository or API layer.
-      },
-      readAccessToken: () async {
-        // Read from your auth module.
-        return 'token';
-      },
-    ),
-  ];
+      tasks: <SyncTask>[
+        UploadPendingItemsTask(
+          upload: () async {
+            // Call your repository or API layer.
+          },
+          readAccessToken: () async {
+            // Read from your auth module.
+            return 'token';
+          },
+        ),
+      ],
+      // 2) Automatically trigger app-open sync on start and resume.
+      appOpenSync: true,
+      // 3) Automatically register, initialize, and schedule background sync.
+      background: EasySyncBackgroundConfig.periodic(
+        uniqueName: 'easy-sync-periodic',
+        frequency: const Duration(hours: 1),
+        inputData: const <String, dynamic>{
+          'source': 'periodic',
+          'hasNetwork': true,
+        },
+      ),
+      // 4) Optional execution safety settings.
+      taskTimeout: const Duration(seconds: 20),
+      isolateTaskFailures: true,
+    );
 
-  // 2) Create a shared state store for app-open and manual sync state.
-  final stateStore = InMemorySyncTaskStateStore();
-
-  // 3) Initialize EasySync for manual triggers and state stream access.
-  final easySync = EasySync.initialize(
-    tasks: tasks,
-    stateStore: stateStore,
-    taskTimeout: const Duration(seconds: 20),
-    isolateTaskFailures: true,
-  );
-
-  // 4) Build registrations once so they can be reused by app-open and background flows.
-  final taskRegistrations = <SyncTaskRegistration>[
-    for (final task in tasks) SyncTaskRegistration(task: task),
-  ];
-
-  // 5) Create a SyncEngine for app-open lifecycle triggers.
-  final appOpenEngine = SyncEngine(
-    taskRegistrations: taskRegistrations,
-    stateStore: stateStore,
-    taskTimeout: const Duration(seconds: 20),
-    isolateTaskFailures: true,
-  );
-
-  // 6) Register background mappings before scheduling jobs.
-  WorkmanagerSyncBridge.registerTaskMapping(
-    taskName: 'sync-background',
-    taskRegistrations: taskRegistrations,
-    stateStoreFactory: InMemorySyncTaskStateStore.new,
-    taskTimeout: const Duration(seconds: 20),
-    isolateTaskFailures: true,
-  );
-
-  // 7) Initialize the workmanager scheduler.
-  final backgroundScheduler = WorkmanagerBackgroundScheduler();
-  await backgroundScheduler.initialize();
-
-  // 8) Schedule the periodic background job.
-  await backgroundScheduler.schedulePeriodic(
-    uniqueName: 'easy-sync-periodic',
-    taskName: 'sync-background',
-    frequency: const Duration(hours: 1),
-    inputData: const <String, dynamic>{
-      'source': 'periodic',
-      'hasNetwork': true,
-    },
-  );
-
-  runApp(
-    MyApp(
-      easySync: easySync,
-      appOpenEngine: appOpenEngine,
-    ),
-  );
+  // 5) The app only needs the returned EasySync instance.
+  runApp(MyApp(easySync: easySync));
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({
-    super.key,
-    required this.easySync,
-    required this.appOpenEngine,
-  });
+class MyApp extends StatelessWidget {
+  const MyApp({super.key, required this.easySync});
 
   final EasySync easySync;
-  final SyncEngine appOpenEngine;
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-
-    // 9) Start listening to app lifecycle events.
-    WidgetsBinding.instance.addObserver(this);
-
-    // 10) Trigger app-open sync the first time the app is shown.
-    widget.appOpenEngine.runAll(
-      SyncPolicyType.appOpen,
-      metadata: const <String, Object?>{
-        'source': 'app_start',
-        'hasNetwork': true,
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    widget.easySync.dispose();
-    widget.appOpenEngine.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
-      return;
-    }
-
-    // 11) Trigger app-open sync again when the app returns to foreground.
-    widget.appOpenEngine.runAll(
-      SyncPolicyType.appOpen,
-      metadata: const <String, Object?>{
-        'source': 'app_resume',
-        'hasNetwork': true,
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -376,8 +299,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         body: Center(
           child: ElevatedButton(
             onPressed: () async {
-              // 12) Use manual sync from the UI when needed.
-              await widget.easySync.runAll(
+              // 6) Manual sync stays simple.
+              await easySync.runAll(
                 metadata: const <String, Object?>{
                   'source': 'button_tap',
                   'hasNetwork': true,
@@ -464,87 +387,25 @@ class _AuthReadyPrecondition implements SyncPrecondition {
 
 ## App Open Sync
 
-Use app lifecycle events to trigger tasks whose `SyncPolicy.appOpen` is `true`.
+For the common case, set `appOpenSync: true` in `EasySync.setup()`.
 
 ```dart
-import 'package:flutter/widgets.dart';
-import 'package:easy_sync/easy_sync.dart';
-
-class SyncLifecycleController extends StatefulWidget {
-  const SyncLifecycleController({
-    super.key,
-    required this.appOpenEngine,
-    required this.child,
-  });
-
-  final SyncEngine appOpenEngine;
-  final Widget child;
-
-  @override
-  State<SyncLifecycleController> createState() => _SyncLifecycleControllerState();
-}
-
-class _SyncLifecycleControllerState extends State<SyncLifecycleController>
-    with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-
-    // Trigger once on first load.
-    widget.appOpenEngine.runAll(
-      SyncPolicyType.appOpen,
-      metadata: const <String, Object?>{
-        'source': 'app_start',
-        'hasNetwork': true,
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
-      return;
-    }
-
-    // Trigger again when the app returns to foreground.
-    widget.appOpenEngine.runAll(
-      SyncPolicyType.appOpen,
-      metadata: const <String, Object?>{
-        'source': 'app_resume',
-        'hasNetwork': true,
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
-}
+final easySync = await EasySync.setup(
+  tasks: tasks,
+  appOpenSync: true,
+);
 ```
 
-Use app-open sync when you want tasks to run:
-- on first launch into the app session
-- when the user returns from background
-- only for tasks that should refresh on foreground entry
+This automatically:
+- triggers app-open tasks once on startup
+- listens for `AppLifecycleState.resumed`
+- triggers app-open tasks again when the app returns to foreground
 
 ## Manual Sync
 
-Use `EasySync` from UI interactions such as pull-to-refresh or a button tap.
+Use the returned `EasySync` instance from UI interactions such as pull-to-refresh or a button tap.
 
 ```dart
-final easySync = EasySync.initialize(
-  tasks: tasks,
-  taskTimeout: const Duration(seconds: 20),
-  isolateTaskFailures: true,
-);
-
-// Run all manual-enabled tasks.
 await easySync.runAll(
   metadata: const <String, Object?>{
     'source': 'pull_to_refresh',
@@ -552,7 +413,6 @@ await easySync.runAll(
   },
 );
 
-// Run one task by key.
 await easySync.runTask(
   'upload_pending_items',
   metadata: const <String, Object?>{
@@ -564,15 +424,53 @@ await easySync.runTask(
 
 ## Background Sync
 
-Use workmanager integration for periodic background execution.
+For the common case, provide `EasySyncBackgroundConfig.periodic(...)` to `EasySync.setup()`.
 
 ```dart
-final tasks = <SyncTask>[
-  UploadPendingItemsTask(
-    upload: () async {},
-    readAccessToken: () async => 'token',
-  ),
-];
+final easySync = await EasySync.setup(
+  tasks: tasks,
+  background: EasySyncBackgroundConfig.periodic(
+    uniqueName: 'easy-sync-periodic',
+    frequency: const Duration(hours: 1),
+    inputData: const <String, dynamic>{
+      'source': 'periodic',
+      'hasNetwork': true,
+    },
+  );
+```
+
+Keep in mind:
+- Android uses WorkManager semantics.
+- iOS uses BGTaskScheduler semantics via `workmanager`.
+- background timing is not guaranteed
+- iOS background timing is especially best-effort
+
+## Advanced Usage
+
+The high-level `EasySync.setup()` API is meant for the common integration path.
+
+Use the lower-level APIs when you need custom control over:
+- task registration creation
+- state store lifecycle
+- app-open scheduling behavior
+- background bridge registration
+- scheduler initialization timing
+
+Available lower-level APIs:
+- `EasySync.initialize(...)`
+- `SyncEngine`
+- `SyncTaskRegistration`
+- `WorkmanagerSyncBridge.registerTaskMapping(...)`
+- `WorkmanagerBackgroundScheduler.initialize()`
+- `WorkmanagerBackgroundScheduler.schedulePeriodic(...)`
+
+Example:
+
+```dart
+final easySync = EasySync.initialize(
+  tasks: tasks,
+  stateStore: InMemorySyncTaskStateStore(),
+);
 
 final taskRegistrations = <SyncTaskRegistration>[
   for (final task in tasks) SyncTaskRegistration(task: task),
@@ -582,8 +480,6 @@ WorkmanagerSyncBridge.registerTaskMapping(
   taskName: 'sync-background',
   taskRegistrations: taskRegistrations,
   stateStoreFactory: InMemorySyncTaskStateStore.new,
-  taskTimeout: const Duration(seconds: 20),
-  isolateTaskFailures: true,
 );
 
 final scheduler = WorkmanagerBackgroundScheduler();
@@ -592,18 +488,8 @@ await scheduler.schedulePeriodic(
   uniqueName: 'easy-sync-periodic',
   taskName: 'sync-background',
   frequency: const Duration(hours: 1),
-  inputData: const <String, dynamic>{
-    'source': 'periodic',
-    'hasNetwork': true,
-  },
 );
 ```
-
-Keep in mind:
-- Android uses WorkManager semantics.
-- iOS uses BGTaskScheduler semantics via `workmanager`.
-- background timing is not guaranteed
-- iOS background timing is especially best-effort
 
 ## Core Concepts
 

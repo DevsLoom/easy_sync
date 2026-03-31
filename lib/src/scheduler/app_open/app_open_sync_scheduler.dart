@@ -8,14 +8,14 @@ typedef ObserverCallback = void Function(WidgetsBindingObserver observer);
 
 class AppOpenSyncScheduler with WidgetsBindingObserver {
   AppOpenSyncScheduler(
-    this._orchestrator, {
+    this._engine, {
     ObserverCallback? addObserver,
     ObserverCallback? removeObserver,
-  })  : _addObserver = addObserver ?? WidgetsBinding.instance.addObserver,
-        _removeObserver =
-            removeObserver ?? WidgetsBinding.instance.removeObserver;
+  }) : _addObserver = addObserver ?? WidgetsBinding.instance.addObserver,
+       _removeObserver =
+           removeObserver ?? WidgetsBinding.instance.removeObserver;
 
-  final SyncOrchestrator _orchestrator;
+  final SyncEngine _engine;
   final ObserverCallback _addObserver;
   final ObserverCallback _removeObserver;
   bool _started = false;
@@ -29,10 +29,7 @@ class AppOpenSyncScheduler with WidgetsBindingObserver {
     _addObserver(this);
 
     await trigger(
-      metadata: <String, Object?>{
-        ...metadata,
-        'event': 'app_start',
-      },
+      metadata: <String, Object?>{...metadata, 'event': 'app_start'},
     );
   }
 
@@ -46,7 +43,7 @@ class AppOpenSyncScheduler with WidgetsBindingObserver {
   }
 
   Future<void> trigger({Map<String, Object?> metadata = const {}}) {
-    return _orchestrator.syncOnAppOpen(metadata: metadata);
+    return _engine.runAll(SyncPolicyType.appOpen, metadata: metadata);
   }
 
   @override
@@ -56,11 +53,7 @@ class AppOpenSyncScheduler with WidgetsBindingObserver {
     }
 
     unawaited(
-      trigger(
-        metadata: const <String, Object?>{
-          'event': 'app_resume',
-        },
-      ),
+      trigger(metadata: const <String, Object?>{'event': 'app_resume'}),
     );
   }
 }

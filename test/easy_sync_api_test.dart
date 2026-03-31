@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:easy_sync/easy_sync.dart';
+import 'package:flutter/widgets.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -70,6 +71,54 @@ void main() {
       await subscription.cancel();
       await easySync.dispose();
     });
+
+    test('setup configures app-open sync and periodic background', () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      final task = _TestTask(
+        key: 'setup-task',
+        policy: const SyncPolicy(appOpen: true, manual: true, background: true),
+      );
+      final backgroundScheduler = _FakeBackgroundScheduler();
+
+      final easySync = await EasySync.setup(
+        tasks: [task],
+        appOpenSync: true,
+        background: EasySyncBackgroundConfig.periodic(
+          uniqueName: 'easy-sync-periodic',
+          frequency: const Duration(hours: 1),
+          inputData: const <String, dynamic>{'source': 'periodic'},
+          driver: EasySyncBackgroundDriver(
+            scheduler: backgroundScheduler,
+            initialize: backgroundScheduler.initialize,
+          ),
+        ),
+      );
+
+      expect(task.count, 1);
+      expect(backgroundScheduler.initializeCount, 1);
+      expect(
+        backgroundScheduler.scheduledTaskName,
+        EasySync.defaultBackgroundTaskName,
+      );
+      expect(backgroundScheduler.scheduledFrequency, const Duration(hours: 1));
+
+      final ok = await WorkmanagerSyncBridge.executeTask(
+        EasySync.defaultBackgroundTaskName,
+        const <String, dynamic>{'source': 'periodic'},
+      );
+
+      expect(ok, isTrue);
+      expect(task.count, 2);
+
+      await easySync.dispose();
+
+      final missing = await WorkmanagerSyncBridge.executeTask(
+        EasySync.defaultBackgroundTaskName,
+        null,
+      );
+      expect(missing, isFalse);
+    });
   });
 }
 
@@ -100,5 +149,41 @@ class _TestTaskHandler implements SyncTaskHandler {
   Future<SyncResult> execute(SyncContext context) async {
     _task.count += 1;
     return SyncResult.success();
+  }
+}
+
+class _FakeBackgroundScheduler implements SyncBackgroundScheduler {
+  int initializeCount = 0;
+  String? scheduledTaskName;
+  Duration? scheduledFrequency;
+
+  Future<void> initialize() async {
+    initializeCount += 1;
+  }
+
+  @override
+  Future<void> cancelAll() async {}
+
+  @override
+  Future<void> cancelByUniqueName(String uniqueName) async {}
+
+  @override
+  Future<void> scheduleOneOff({
+    required String uniqueName,
+    required String taskName,
+    Map<String, dynamic>? inputData,
+    Duration? initialDelay,
+  }) async {}
+
+  @override
+  Future<void> schedulePeriodic({
+    required String uniqueName,
+    required String taskName,
+    required Duration frequency,
+    Map<String, dynamic>? inputData,
+    Duration? initialDelay,
+  }) async {
+    scheduledTaskName = taskName;
+    scheduledFrequency = frequency;
   }
 }
