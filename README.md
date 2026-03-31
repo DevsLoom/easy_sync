@@ -36,6 +36,80 @@ flutter pub get
 
 If you use background sync, also complete the native platform setup required by `workmanager` for Android and iOS.
 
+### Native Setup For Background Sync
+
+Use these steps before calling `WorkmanagerBackgroundScheduler.initialize()` and `schedulePeriodic()`.
+
+#### Android
+
+Android setup is the simple part.
+
+1. Add `easy_sync` to your app.
+2. Run `flutter pub get`.
+3. Make sure your app uses Flutter's default generated Android setup.
+4. No extra Android manifest or Application class setup is usually needed for basic workmanager usage.
+
+In most apps, Android works after Dart-side initialization only.
+
+#### iOS
+
+iOS needs explicit native setup.
+
+1. Open `ios/Runner.xcworkspace` in Xcode.
+2. Select the `Runner` target.
+3. Set the minimum deployment target to iOS 14.0 or later.
+4. Open `Signing & Capabilities`.
+5. Add `Background Modes`.
+6. Enable the background mode that matches your scheduling approach.
+
+For periodic background sync with workmanager, use BGTaskScheduler-style setup:
+
+Add these keys in `ios/Runner/Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>processing</string>
+</array>
+
+<key>BGTaskSchedulerPermittedIdentifiers</key>
+<array>
+    <string>com.yourapp.sync-background</string>
+</array>
+```
+
+Then register the same identifier in `ios/Runner/AppDelegate.swift`:
+
+```swift
+import UIKit
+import Flutter
+import workmanager_apple
+
+@main
+@objc class AppDelegate: FlutterAppDelegate {
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    WorkmanagerPlugin.registerPeriodicTask(
+      withIdentifier: "com.yourapp.sync-background",
+      frequency: NSNumber(value: 20 * 60)
+    )
+
+    GeneratedPluginRegistrant.register(with: self)
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+}
+```
+
+Keep these rules in mind:
+- Use the same identifier in `Info.plist` and `AppDelegate.swift`.
+- iOS background execution is best-effort.
+- Exact timing is not guaranteed.
+- Real devices are more reliable than simulators for background testing.
+
+If you want the most up-to-date native details, check the `workmanager` quick start as well, because platform requirements can change between plugin versions.
+
 ## Quick Start
 
 Start with one task and trigger it manually.
