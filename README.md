@@ -74,7 +74,8 @@ Add these keys in `ios/Runner/Info.plist`:
 
 <key>BGTaskSchedulerPermittedIdentifiers</key>
 <array>
-    <string>com.yourapp.sync-background</string>
+  <!-- Example: if your app id is ca.devsloom.testapp -->
+  <string>ca.devsloom.testapp.sync-background</string>
 </array>
 ```
 
@@ -91,8 +92,12 @@ import workmanager_apple
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Use your own app's bundle-style identifier here.
+    // Example:
+    // if your app id is ca.devsloom.testapp
+    // then use ca.devsloom.testapp.sync-background
     WorkmanagerPlugin.registerPeriodicTask(
-      withIdentifier: "com.yourapp.sync-background",
+      withIdentifier: "ca.devsloom.testapp.sync-background",
       frequency: NSNumber(value: 20 * 60)
     )
 
@@ -104,6 +109,7 @@ import workmanager_apple
 
 Keep these rules in mind:
 - Use the same identifier in `Info.plist` and `AppDelegate.swift`.
+- A safe pattern is: `<your-app-id>.sync-background`.
 - iOS background execution is best-effort.
 - Exact timing is not guaranteed.
 - Real devices are more reliable than simulators for background testing.
