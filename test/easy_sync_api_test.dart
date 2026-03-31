@@ -10,12 +10,7 @@ void main() {
         key: 'manual-task',
         policy: const SyncPolicy(manual: true),
       );
-      final easySync = EasySync(
-        taskRegistrations: [
-          SyncTaskRegistration(task: task),
-        ],
-        stateStore: InMemorySyncTaskStateStore(),
-      );
+      final easySync = EasySync.initialize(tasks: [task]);
 
       final state = await easySync.runTask('manual-task');
 
@@ -37,13 +32,7 @@ void main() {
         policy: const SyncPolicy(manual: false),
       );
 
-      final easySync = EasySync(
-        taskRegistrations: [
-          SyncTaskRegistration(task: allowedTask),
-          SyncTaskRegistration(task: blockedTask),
-        ],
-        stateStore: InMemorySyncTaskStateStore(),
-      );
+      final easySync = EasySync.initialize(tasks: [allowedTask, blockedTask]);
 
       final states = await easySync.runAll();
 
@@ -60,12 +49,7 @@ void main() {
         key: 'stream-task',
         policy: const SyncPolicy(manual: true),
       );
-      final easySync = EasySync(
-        taskRegistrations: [
-          SyncTaskRegistration(task: task),
-        ],
-        stateStore: InMemorySyncTaskStateStore(),
-      );
+      final easySync = EasySync.initialize(tasks: [task]);
 
       final statuses = <SyncTaskStatus>[];
       final subscription = easySync.stateUpdates.listen((state) {
