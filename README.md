@@ -1,6 +1,12 @@
 # easy_sync
 
-A Flutter sync orchestration package that standardizes app-open, manual, and background sync flows without imposing backend, auth, or database decisions.
+[![pub package](https://img.shields.io/pub/v/easy_sync.svg)](https://pub.dev/packages/easy_sync)
+[![likes](https://img.shields.io/pub/likes/easy_sync)](https://pub.dev/packages/easy_sync/score)
+[![popularity](https://img.shields.io/pub/popularity/easy_sync)](https://pub.dev/packages/easy_sync/score)
+
+`easy_sync` is a Flutter background sync and offline sync orchestration package.
+
+It helps you run reliable app-open, manual, and background sync flows with workmanager, retry, preconditions, and execution controls such as rate limit and circuit breaker.
 
 ## Overview
 
@@ -19,13 +25,22 @@ The package is:
 - database-agnostic
 - reusable across different Flutter apps
 
+## Use Cases
+
+Use `easy_sync` when your app needs:
+- offline-first sync from local database to remote API
+- queued uploads and retry after transient failures
+- app-open refresh and pull-to-refresh with shared orchestration
+- background periodic sync with WorkManager and iOS fetch/processing modes
+- backend protection through rate limiting and circuit breaker behavior
+
 ## Installation
 
 Add the package to your app:
 
 ```yaml
 dependencies:
-  easy_sync: ^0.1.0
+  easy_sync: ^0.2.0
 ```
 
 Then install dependencies:
@@ -560,3 +575,12 @@ Where should I configure background sync?
 
 When should I trigger app-open sync?
 - Set `appOpenSync: true` in `EasySync.setup()` for the common case.
+
+How do I sync local database data in background with Dio?
+- Read pending records inside your task `run` function, call your Dio API client, then mark records as synced. Re-open required dependencies in background execution context.
+
+Should I use iOS Background Fetch or BGTaskScheduler periodic mode?
+- Use `EasySyncBackgroundConfig.iosBackgroundFetch()` for simpler setup and system-managed timing. Use `EasySyncBackgroundConfig.enabled(...)` or `.periodic(...)` when you need BGTaskScheduler periodic behavior with custom frequency.
+
+Can I protect my backend from sync spikes?
+- Yes. Configure `SyncRateLimit` and `SyncCircuitBreaker` in `EasySync.setup(...)` to block excessive execution bursts and temporarily open-circuit on repeated failures.
