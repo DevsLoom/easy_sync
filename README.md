@@ -45,43 +45,75 @@ lib/
 ```dart
 import 'package:easy_sync/easy_sync.dart';
 
-class UploadTask implements SyncTask {
-  @override
-  String get id => 'upload';
+class UploadDataTask implements SyncTask {
+  UploadDataTask({required this.api, required this.getToken});
+
+  final ApiClient api;
+  final Future<String?> Function() getToken;
 
   @override
-  String get description => 'Upload pending records';
+  String get key => 'upload_data';
 
   @override
-  Future<SyncTaskResult> run(SyncContext context) async {
-    // Your app logic goes here.
-    return SyncTaskResult.success();
+  SyncPolicy get policy => const SyncPolicy(
+        appOpen: true,
+        background: true,
+      );
+
+  @override
+  List<SyncPrecondition> get preconditions => <SyncPrecondition>[
+        const RequiresNetworkPrecondition(),
+        CustomPrecondition((context) async {
+          final token = await getToken();
+          if (token == null) {
+            return PreconditionResult.blocked(reason: 'no_auth');
+          }
+          return PreconditionResult.allow();
+        }),
+      ];
+
+  @override
+  SyncTaskHandler get handler => _UploadDataHandler(api: api);
+}
+
+class _UploadDataHandler implements SyncTaskHandler {
+  _UploadDataHandler({required this.api});
+
+  final ApiClient api;
+
+  @override
+  Future<SyncResult> execute(SyncContext context) async {
+    await api.upload();
+    return SyncResult.success();
   }
 }
 
-Future<void> main() async {
-  final orchestrator = SyncOrchestrator(
-    taskRegistrations: [
-      SyncTaskRegistration(
-        task: UploadTask(),
-        preconditions: [
-          PredicatePrecondition(
-            name: 'network',
-            predicate: (_) async => true,
-          ),
-          PredicatePrecondition(
-            name: 'user-authenticated',
-            predicate: (_) async => true,
-          ),
-        ],
-      ),
+// This precondition is app-specific custom logic.
+// It is not part of easy_sync.
+class CustomPrecondition implements SyncPrecondition {
+  CustomPrecondition(this._check);
+
+  final Future<PreconditionResult> Function(SyncContext context) _check;
+
+  @override
+  String get name => 'custom';
+
+  @override
+  Future<PreconditionResult> check(SyncContext context) => _check(context);
+}
+
+Future<void> setupSync(ApiClient api, Future<String?> Function() getToken) async {
+  final easySync = EasySync.initialize(
+    tasks: <SyncTask>[
+      UploadDataTask(api: api, getToken: getToken),
     ],
-    stateStore: InMemorySyncTaskStateStore(),
-    retryPolicy: const ExponentialBackoffRetryPolicy(),
   );
 
-  await orchestrator.syncOnAppOpen();
-  await orchestrator.syncManually();
+  // Pull to refresh
+  await easySync.runAll();
+
+  // Button click for a single task
+  await easySync.runTask('upload_data');
 }
 ```
 
