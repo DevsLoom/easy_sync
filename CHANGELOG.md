@@ -1,3 +1,15 @@
+## 0.2.0
+
+### Added
+
+- Function-first task API with `SyncTask.fn(...)` for simpler integrations.
+- iOS Background Fetch mode support via `EasySyncBackgroundConfig.iosBackgroundFetch(...)`.
+- Android schedule inspection helper `WorkmanagerBackgroundScheduler.isScheduledByUniqueName(...)`.
+- Execution controls: rate limiting (`SyncRateLimit`) and circuit breaker (`SyncCircuitBreaker`).
+- Engine and background-bridge support for rate limit and circuit breaker runtime behavior.
+- Expanded tests for background behavior, execution controls, and setup propagation.
+- Documentation updates for iOS mode choices and execution controls.
+
 ## 0.1.0
 
 Initial public release.
