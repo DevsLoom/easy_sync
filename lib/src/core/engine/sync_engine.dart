@@ -150,7 +150,7 @@ class SyncEngine {
     try {
       result = await registration.task.handler.execute(context);
     } catch (error, stackTrace) {
-      result = SyncResult.retryable(error: error, stackTrace: stackTrace);
+      result = SyncResult.failure(error: error, stackTrace: stackTrace);
     }
 
     final finishedAt = _clock();

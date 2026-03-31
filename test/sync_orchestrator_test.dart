@@ -71,6 +71,33 @@ void main() {
       expect(scheduled['a'], const Duration(seconds: 3));
       expect(state.nextRetryAt, isNotNull);
     });
+
+    test('does not schedule retry when task failure is non-retryable',
+        () async {
+      final scheduled = <String, Duration>{};
+      final store = InMemorySyncTaskStateStore();
+      final orchestrator = SyncOrchestrator(
+        taskRegistrations: [
+          SyncTaskRegistration(task: _FakeTask.nonRetryableFailure(key: 'a')),
+        ],
+        stateStore: store,
+        onRetryScheduled: ({
+          required String taskId,
+          required Duration delay,
+          required Map<String, Object?> metadata,
+        }) async {
+          scheduled[taskId] = delay;
+        },
+      );
+
+      await orchestrator.syncInBackground();
+
+      final state = store.getOrCreate('a');
+      expect(state.status, SyncTaskStatus.failed);
+      expect(state.attempt, 1);
+      expect(scheduled, isEmpty);
+      expect(state.nextRetryAt, isNull);
+    });
   });
 
   group('SyncEngine', () {
@@ -139,7 +166,17 @@ class _FakeTask implements SyncTask {
         policy = const SyncPolicy(
           retry: RetryConfig.exponential(
             initialDelay: Duration(seconds: 3),
-            maxAttempts: 1,
+            maxRetries: 1,
+          ),
+        );
+
+  _FakeTask.nonRetryableFailure({required this.key})
+      : _handler =
+            _FakeTaskHandler(SyncResult.failure(error: StateError('boom'))),
+        policy = const SyncPolicy(
+          retry: RetryConfig.exponential(
+            initialDelay: Duration(seconds: 3),
+            maxRetries: 3,
           ),
         );
 

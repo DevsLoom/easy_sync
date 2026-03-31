@@ -6,26 +6,31 @@ import 'package:meta/meta.dart';
 class RetryConfig {
   const RetryConfig.disabled()
       : enabled = false,
-        maxAttempts = 0,
+        maxRetries = 0,
         initialDelay = Duration.zero,
         maxDelay = Duration.zero,
         multiplier = 1;
 
   const RetryConfig.exponential({
-    this.maxAttempts = 5,
+    int? maxRetries,
+    @Deprecated('Use maxRetries instead.') int? maxAttempts,
     this.initialDelay = const Duration(seconds: 2),
     this.maxDelay = const Duration(minutes: 5),
     this.multiplier = 2,
-  }) : enabled = true;
+  })  : maxRetries = maxRetries ?? maxAttempts ?? 5,
+        enabled = true;
 
   final bool enabled;
-  final int maxAttempts;
+  final int maxRetries;
   final Duration initialDelay;
   final Duration maxDelay;
   final int multiplier;
 
+  @Deprecated('Use maxRetries instead.')
+  int get maxAttempts => maxRetries;
+
   Duration? nextDelay(int attempt) {
-    if (!enabled || attempt > maxAttempts || attempt <= 0) {
+    if (!enabled || attempt > maxRetries || attempt <= 0) {
       return null;
     }
 

@@ -15,18 +15,22 @@ class ExponentialBackoffRetryPolicy implements RetryPolicy {
   const ExponentialBackoffRetryPolicy({
     this.initialDelay = const Duration(seconds: 2),
     this.maxDelay = const Duration(minutes: 5),
-    this.maxAttempts = 5,
+    int? maxRetries,
+    @Deprecated('Use maxRetries instead.') int? maxAttempts,
     this.multiplier = 2,
-  });
+  }) : maxRetries = maxRetries ?? maxAttempts ?? 5;
 
   final Duration initialDelay;
   final Duration maxDelay;
-  final int maxAttempts;
+  final int maxRetries;
   final int multiplier;
+
+  @Deprecated('Use maxRetries instead.')
+  int get maxAttempts => maxRetries;
 
   @override
   Duration? nextDelay({required int attempt, required Object error}) {
-    if (attempt > maxAttempts) {
+    if (attempt > maxRetries) {
       return null;
     }
 
