@@ -84,8 +84,7 @@ void main() {
       final easySync = await EasySync.setup(
         tasks: [task],
         appOpenSync: true,
-        background: EasySyncBackgroundConfig.periodic(
-          uniqueName: 'easy-sync-periodic',
+        background: EasySyncBackgroundConfig.enabled(
           frequency: const Duration(hours: 1),
           inputData: const <String, dynamic>{'source': 'periodic'},
           driver: EasySyncBackgroundDriver(
@@ -97,6 +96,10 @@ void main() {
 
       expect(task.count, 1);
       expect(backgroundScheduler.initializeCount, 1);
+      expect(
+        backgroundScheduler.scheduledUniqueName,
+        EasySync.defaultBackgroundUniqueName,
+      );
       expect(
         backgroundScheduler.scheduledTaskName,
         EasySync.defaultBackgroundTaskName,
@@ -119,6 +122,38 @@ void main() {
       );
       expect(missing, isFalse);
     });
+
+    test(
+      'enabled background normalizes frequency to workmanager minimum',
+      () async {
+        WidgetsFlutterBinding.ensureInitialized();
+
+        final backgroundScheduler = _FakeBackgroundScheduler();
+
+        final easySync = await EasySync.setup(
+          tasks: [
+            _TestTask(
+              key: 'minimum-frequency-task',
+              policy: const SyncPolicy(background: true),
+            ),
+          ],
+          background: EasySyncBackgroundConfig.enabled(
+            frequency: const Duration(minutes: 5),
+            driver: EasySyncBackgroundDriver(
+              scheduler: backgroundScheduler,
+              initialize: backgroundScheduler.initialize,
+            ),
+          ),
+        );
+
+        expect(
+          backgroundScheduler.scheduledFrequency,
+          EasySync.minimumBackgroundFrequency,
+        );
+
+        await easySync.dispose();
+      },
+    );
   });
 }
 
@@ -154,6 +189,7 @@ class _TestTaskHandler implements SyncTaskHandler {
 
 class _FakeBackgroundScheduler implements SyncBackgroundScheduler {
   int initializeCount = 0;
+  String? scheduledUniqueName;
   String? scheduledTaskName;
   Duration? scheduledFrequency;
 
@@ -183,6 +219,7 @@ class _FakeBackgroundScheduler implements SyncBackgroundScheduler {
     Map<String, dynamic>? inputData,
     Duration? initialDelay,
   }) async {
+    scheduledUniqueName = uniqueName;
     scheduledTaskName = taskName;
     scheduledFrequency = frequency;
   }

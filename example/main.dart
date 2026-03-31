@@ -8,8 +8,7 @@ Future<void> main() async {
   final easySync = await EasySync.setup(
     tasks: <SyncTask>[_SampleSyncTask()],
     appOpenSync: true,
-    background: EasySyncBackgroundConfig.periodic(
-      uniqueName: 'easy-sync-periodic',
+    background: EasySyncBackgroundConfig.enabled(
       frequency: const Duration(hours: 1),
       inputData: const <String, dynamic>{
         'source': 'example_periodic',

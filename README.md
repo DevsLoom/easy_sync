@@ -38,7 +38,7 @@ If you use background sync, also complete the native platform setup required by 
 
 ### Native Setup For Background Sync
 
-Use these steps before calling `WorkmanagerBackgroundScheduler.initialize()` and `schedulePeriodic()`.
+Use these steps before enabling background sync through `EasySync.setup(...)`.
 
 #### Android
 
@@ -207,8 +207,7 @@ Future<void> example() async {
       ),
     ],
     appOpenSync: true,
-    background: EasySyncBackgroundConfig.periodic(
-      uniqueName: 'easy-sync-periodic',
+    background: EasySyncBackgroundConfig.enabled(
       frequency: const Duration(hours: 1),
       inputData: const <String, dynamic>{
         'source': 'periodic',
@@ -238,7 +237,7 @@ Use this order in a real Flutter app:
 2. Call `await EasySync.setup(...)` near app startup.
 3. Let `EasySync.setup(...)` create task registrations and the default state store.
 4. Let `EasySync.setup(...)` register the background task mapping.
-5. Let `EasySync.setup(...)` initialize the scheduler and schedule the periodic job.
+5. Let `EasySync.setup(...)` initialize workmanager and schedule the periodic job.
 6. Let `EasySync.setup(...)` automatically start app-open sync if `appOpenSync: true`.
 7. Use `runAll()` or `runTask()` for manual sync from the UI.
 
@@ -258,35 +257,33 @@ import 'package:easy_sync/easy_sync.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1) Define your app tasks.
   final easySync = await EasySync.setup(
-    UploadPendingItemsTask(
-      tasks: <SyncTask>[
-        UploadPendingItemsTask(
-          upload: () async {
-            // Call your repository or API layer.
-          },
-          readAccessToken: () async {
-            // Read from your auth module.
-            return 'token';
-          },
-        ),
-      ],
-      // 2) Automatically trigger app-open sync on start and resume.
-      appOpenSync: true,
-      // 3) Automatically register, initialize, and schedule background sync.
-      background: EasySyncBackgroundConfig.periodic(
-        uniqueName: 'easy-sync-periodic',
-        frequency: const Duration(hours: 1),
-        inputData: const <String, dynamic>{
-          'source': 'periodic',
-          'hasNetwork': true,
+    // 1) Define your app tasks.
+    tasks: <SyncTask>[
+      UploadPendingItemsTask(
+        upload: () async {
+          // Call your repository or API layer.
+        },
+        readAccessToken: () async {
+          // Read from your auth module.
+          return 'token';
         },
       ),
-      // 4) Optional execution safety settings.
-      taskTimeout: const Duration(seconds: 20),
-      isolateTaskFailures: true,
-    );
+    ],
+    // 2) Automatically trigger app-open sync on start and resume.
+    appOpenSync: true,
+    // 3) Enable background sync with the common configuration path.
+    background: EasySyncBackgroundConfig.enabled(
+      frequency: const Duration(hours: 1),
+      inputData: const <String, dynamic>{
+        'source': 'periodic',
+        'hasNetwork': true,
+      },
+    ),
+    // 4) Optional execution safety settings.
+    taskTimeout: const Duration(seconds: 20),
+    isolateTaskFailures: true,
+  );
 
   // 5) The app only needs the returned EasySync instance.
   runApp(MyApp(easySync: easySync));
@@ -430,13 +427,12 @@ await easySync.runTask(
 
 ## Background Sync
 
-For the common case, provide `EasySyncBackgroundConfig.periodic(...)` to `EasySync.setup()`.
+For the common case, provide `EasySyncBackgroundConfig.enabled()` to `EasySync.setup()`.
 
 ```dart
 final easySync = await EasySync.setup(
   tasks: tasks,
-  background: EasySyncBackgroundConfig.periodic(
-    uniqueName: 'easy-sync-periodic',
+  background: EasySyncBackgroundConfig.enabled(
     frequency: const Duration(hours: 1),
     inputData: const <String, dynamic>{
       'source': 'periodic',
@@ -449,6 +445,7 @@ Keep in mind:
 - Android uses WorkManager semantics.
 - iOS uses BGTaskScheduler semantics via `workmanager`.
 - background timing is not guaranteed
+- Android periodic work has a practical 15 minute minimum interval behavior.
 - iOS background timing is especially best-effort
 
 ## Advanced Usage
@@ -464,6 +461,7 @@ Use the lower-level APIs when you need custom control over:
 
 Available lower-level APIs:
 - `EasySync.initialize(...)`
+- `EasySyncBackgroundConfig.periodic(...)`
 - `SyncEngine`
 - `SyncTaskRegistration`
 - `WorkmanagerSyncBridge.registerTaskMapping(...)`
@@ -496,6 +494,13 @@ await scheduler.schedulePeriodic(
   frequency: const Duration(hours: 1),
 );
 ```
+
+Use `EasySyncBackgroundConfig.periodic(...)` when you need to customize values such as:
+- `uniqueName`
+- `taskName`
+- `stateStoreFactory`
+- `initialDelay`
+- custom scheduler driver for advanced integrations or testing
 
 ## Core Concepts
 

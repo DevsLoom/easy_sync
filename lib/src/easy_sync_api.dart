@@ -22,15 +22,42 @@ class EasySyncBackgroundDriver {
 }
 
 class EasySyncBackgroundConfig {
+  EasySyncBackgroundConfig.enabled({
+    Duration frequency = EasySync.minimumBackgroundFrequency,
+    Map<String, dynamic> inputData = const <String, dynamic>{},
+    Duration? initialDelay,
+    SyncTaskStateStoreFactory? stateStoreFactory,
+    EasySyncBackgroundDriver? driver,
+  }) : this._(
+         uniqueName: EasySync.defaultBackgroundUniqueName,
+         taskName: EasySync.defaultBackgroundTaskName,
+         frequency: _normalizeFrequency(frequency),
+         inputData: inputData,
+         initialDelay: initialDelay,
+         stateStoreFactory: stateStoreFactory,
+         driver: driver ?? EasySyncBackgroundDriver.workmanager(),
+       );
+
   EasySyncBackgroundConfig.periodic({
     required this.uniqueName,
-    required this.frequency,
+    required Duration frequency,
     this.taskName = EasySync.defaultBackgroundTaskName,
     this.inputData = const <String, dynamic>{},
     this.initialDelay,
     this.stateStoreFactory,
     EasySyncBackgroundDriver? driver,
-  }) : driver = driver ?? EasySyncBackgroundDriver.workmanager();
+  }) : driver = driver ?? EasySyncBackgroundDriver.workmanager(),
+       frequency = _normalizeFrequency(frequency);
+
+  const EasySyncBackgroundConfig._({
+    required this.uniqueName,
+    required this.taskName,
+    required this.frequency,
+    required this.inputData,
+    required this.initialDelay,
+    required this.stateStoreFactory,
+    required this.driver,
+  });
 
   final String uniqueName;
   final String taskName;
@@ -39,11 +66,21 @@ class EasySyncBackgroundConfig {
   final Duration? initialDelay;
   final SyncTaskStateStoreFactory? stateStoreFactory;
   final EasySyncBackgroundDriver driver;
+
+  static Duration _normalizeFrequency(Duration frequency) {
+    if (frequency < EasySync.minimumBackgroundFrequency) {
+      return EasySync.minimumBackgroundFrequency;
+    }
+    return frequency;
+  }
 }
 
 class EasySync {
   static const String defaultBackgroundTaskName =
       'easy_sync.background.periodic';
+  static const String defaultBackgroundUniqueName =
+      'easy_sync.background.periodic.default';
+  static const Duration minimumBackgroundFrequency = Duration(minutes: 15);
 
   static Future<EasySync> setup({
     required List<SyncTask> tasks,
