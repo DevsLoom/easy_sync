@@ -44,7 +44,7 @@ void main() {
       await easySync.dispose();
     });
 
-    test('stateUpdates emits task state transitions', () async {
+    test('stateStream emits task state transitions', () async {
       final task = _TestTask(
         key: 'stream-task',
         policy: const SyncPolicy(manual: true),
@@ -52,8 +52,10 @@ void main() {
       final easySync = EasySync.initialize(tasks: [task]);
 
       final statuses = <SyncTaskStatus>[];
-      final subscription = easySync.stateUpdates.listen((state) {
-        if (state.taskId == 'stream-task') {
+      final keys = <String>[];
+      final subscription = easySync.stateStream.listen((state) {
+        if (state.taskKey == 'stream-task') {
+          keys.add(state.taskKey);
           statuses.add(state.status);
         }
       });
@@ -61,6 +63,7 @@ void main() {
       await easySync.runTask('stream-task');
       await Future<void>.delayed(Duration.zero);
 
+      expect(keys, contains('stream-task'));
       expect(statuses, contains(SyncTaskStatus.running));
       expect(statuses, contains(SyncTaskStatus.success));
 

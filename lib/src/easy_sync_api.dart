@@ -43,6 +43,9 @@ class EasySync {
   final List<SyncTaskRegistration> _taskRegistrations;
   final SyncEngine _engine;
 
+  Stream<SyncTaskState> get stateStream => _engine.stateUpdates;
+
+  @Deprecated('Use stateStream instead.')
   Stream<SyncTaskState> get stateUpdates => _engine.stateUpdates;
 
   Future<SyncTaskState> runTask(

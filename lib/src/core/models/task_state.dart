@@ -16,11 +16,8 @@ class SyncTaskState {
     this.lastTrigger,
   });
 
-  factory SyncTaskState.initial(String taskId) => SyncTaskState(
-        taskId: taskId,
-        status: SyncTaskStatus.idle,
-        attempt: 0,
-      );
+  factory SyncTaskState.initial(String taskId) =>
+      SyncTaskState(taskId: taskId, status: SyncTaskStatus.idle, attempt: 0);
 
   final String taskId;
   final SyncTaskStatus status;
@@ -30,6 +27,8 @@ class SyncTaskState {
   final DateTime? lastFinishedAt;
   final DateTime? nextRetryAt;
   final SyncTrigger? lastTrigger;
+
+  String get taskKey => taskId;
 
   SyncTaskState copyWith({
     SyncTaskStatus? status,
