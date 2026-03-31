@@ -1,15 +1,25 @@
 name: easy_sync
 description: Flutter sync orchestration for app-open, manual, and background flows with retry, preconditions, and task state tracking.
 version: 0.1.0
-homepage: https://<ORG_OR_PRODUCT_SITE>/easy_sync
-repository: https://<VCS_HOST>/<ORG>/<REPO>
-issue_tracker: https://<VCS_HOST>/<ORG>/<REPO>/issues
+homepage: https://<VERIFIED_PUBLISHER_DOMAIN_OR_PRODUCT_PAGE>/easy_sync
+repository: https://<VCS_HOST>/<VERIFIED_PUBLISHER_ORG>/<REPO_NAME>
+issue_tracker: https://<VCS_HOST>/<VERIFIED_PUBLISHER_ORG>/<REPO_NAME>/issues
+documentation: https://<VCS_HOST>/<VERIFIED_PUBLISHER_ORG>/<REPO_NAME>#readme
 topics:
   - flutter
   - synchronization
   - background-tasks
   - offline-first
   - workmanager
+
+# Optional, only if your publisher has active funding links:
+# funding:
+#   - https://github.com/sponsors/<VERIFIED_PUBLISHER_ORG>
+
+# Optional, add when screenshot assets are present in the repo:
+# screenshots:
+#   - description: easy_sync trigger and orchestration overview
+#     path: screenshots/overview.png
 
 environment:
   sdk: '>=3.11.0 <4.0.0'

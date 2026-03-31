@@ -2,7 +2,8 @@
 
 Initial public release.
 
-Highlights:
+### Added
+
 - Core sync orchestration with trigger-aware task policies.
 - Manual, app-open, and background sync flows.
 - Retry support with configurable exponential backoff.
@@ -11,6 +12,7 @@ Highlights:
 - Workmanager adapter for background dispatch integration.
 - Safe execution options including timeout and task-failure isolation.
 
-Notes:
+### Notes
+
 - easy_sync is auth-agnostic, backend-agnostic, and database-agnostic.
 - iOS background execution timing is best-effort and not guaranteed.

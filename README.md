@@ -51,6 +51,8 @@ Then run:
 flutter pub get
 ```
 
+Before publishing your own app with background support, complete native setup required by workmanager on Android and iOS.
+
 ## Quick Start
 
 ```dart
@@ -258,6 +260,8 @@ Future<void> configureBackground(List<SyncTaskRegistration> taskRegistrations) a
 - iOS timing is best-effort. Exact run time is not guaranteed.
 - Background execution depends on OS policies, battery conditions, and app usage patterns.
 
+For platform setup details, see workmanager package documentation.
+
 ## Platform Limitations
 
 - No guarantee of exact background execution intervals.
@@ -318,5 +322,3 @@ Project and contribution links should be set in pubspec metadata before publishi
 ## License
 
 This package is licensed under the MIT License.
-
-Add a LICENSE file at the repository root if not already present.

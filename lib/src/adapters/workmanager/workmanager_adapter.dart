@@ -118,11 +118,13 @@ class WorkmanagerBackgroundScheduler implements SyncBackgroundScheduler {
 
   final Workmanager _workmanager;
 
-  Future<void> initialize({bool isInDebugMode = false}) {
-    return _workmanager.initialize(
-      backgroundDispatcher,
-      isInDebugMode: isInDebugMode,
-    );
+  Future<void> initialize({
+    @Deprecated(
+      'No longer used by workmanager. Configure debug handlers via workmanager APIs.',
+    )
+    bool isInDebugMode = false,
+  }) {
+    return _workmanager.initialize(backgroundDispatcher);
   }
 
   @override

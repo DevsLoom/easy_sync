@@ -2,6 +2,8 @@
 
 This example guide shows one practical setup pattern for apps using easy_sync.
 
+A minimal runnable snippet is also available at `example/main.dart`.
+
 ## Scenario
 
 - Manual sync from pull-to-refresh.

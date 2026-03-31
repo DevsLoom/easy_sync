@@ -1,0 +1,17 @@
+# Keep package upload minimal and focused.
+
+# Local/editor/system artifacts
+.DS_Store
+.idea/
+.vscode/
+
+# Build/tool outputs
+.dart_tool/
+build/
+
+# VCS and CI metadata (not required on pub.dev)
+.git/
+.github/
+
+# Workspace extras
+pubspec.lock
