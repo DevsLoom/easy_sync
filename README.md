@@ -225,22 +225,17 @@ Future<void> example() async {
 }
 ```
 
+See the Full Example below for a production-ready setup with retry handling, preconditions, and background sync configuration.
+
 ## Recommended Integration Order
 
-Use this order in a real Flutter app:
+Follow this simple flow in your app:
 
-1. Define your `SyncTask` implementations.
-2. Call `await EasySync.setup(...)` near app startup.
-3. Let `EasySync.setup(...)` create task registrations and the default state store.
-4. Let `EasySync.setup(...)` register the background task mapping.
-5. Let `EasySync.setup(...)` initialize workmanager and schedule the periodic job.
-6. Let `EasySync.setup(...)` automatically start app-open sync if `appOpenSync: true`.
-7. Use `runAll()` or `runTask()` for manual sync from the UI.
-
-A good mental model is:
-- `EasySync.setup()` is the main onboarding path.
-- `EasySync.initialize()` and the lower-level APIs remain available for advanced use cases.
-- You only need the lower-level APIs when the default setup flow is not enough.
+1. Define your `SyncTask` classes.
+2. Call `EasySync.setup(...)` during app startup (usually in `main()`).
+3. Pass the returned `EasySync` instance into your app.
+4. Trigger manual sync from the UI when needed (`runAll()` / `runTask()`).
+5. Let `easy_sync` handle app-open and background sync automatically.
 
 ## Full Example (main.dart)
 
