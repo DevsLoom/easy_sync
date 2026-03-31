@@ -1,28 +1,105 @@
 import 'package:workmanager/workmanager.dart';
 
+import '../../core/core.dart';
 import '../../scheduler/background/sync_background_scheduler.dart';
 
 typedef WorkmanagerSyncHandler = Future<void> Function(
     String taskName, Map<String, dynamic>? inputData);
 
+typedef SyncTaskStateStoreFactory = SyncTaskStateStore Function();
+
+@pragma('vm:entry-point')
+void backgroundDispatcher() {
+  Workmanager().executeTask(WorkmanagerSyncBridge.executeTask);
+}
+
 class WorkmanagerSyncBridge {
   static WorkmanagerSyncHandler? _handler;
+  static final Map<String, _WorkmanagerTaskBinding> _taskBindings =
+      <String, _WorkmanagerTaskBinding>{};
 
+  @Deprecated('Use registerTaskMapping to execute SyncEngine internally.')
   static void setHandler(WorkmanagerSyncHandler handler) {
     _handler = handler;
   }
 
-  @pragma('vm:entry-point')
-  static void callbackDispatcher() {
-    Workmanager().executeTask((taskName, inputData) async {
+  static void registerTaskMapping({
+    required String taskName,
+    required List<SyncTaskRegistration> taskRegistrations,
+    required SyncTaskStateStoreFactory stateStoreFactory,
+    List<SyncPrecondition> globalPreconditions = const <SyncPrecondition>[],
+    SyncLogger logger = const NoopSyncLogger(),
+    RetryScheduleCallback? onRetryScheduled,
+    DateTime Function()? clock,
+  }) {
+    _taskBindings[taskName] = _WorkmanagerTaskBinding(
+      taskRegistrations: taskRegistrations,
+      stateStoreFactory: stateStoreFactory,
+      globalPreconditions: globalPreconditions,
+      logger: logger,
+      onRetryScheduled: onRetryScheduled,
+      clock: clock,
+    );
+  }
+
+  static void unregisterTaskMapping(String taskName) {
+    _taskBindings.remove(taskName);
+  }
+
+  static void clearTaskMappings() {
+    _taskBindings.clear();
+  }
+
+  static Future<bool> executeTask(
+    String taskName,
+    Map<String, dynamic>? inputData,
+  ) async {
+    try {
       final handler = _handler;
-      if (handler == null) {
+      if (handler != null) {
+        await handler(taskName, inputData);
+        return true;
+      }
+
+      final binding = _taskBindings[taskName];
+      if (binding == null) {
         return false;
       }
 
-      await handler(taskName, inputData);
+      final engine = SyncEngine(
+        taskRegistrations: binding.taskRegistrations,
+        stateStore: binding.stateStoreFactory(),
+        globalPreconditions: binding.globalPreconditions,
+        logger: binding.logger,
+        onRetryScheduled: binding.onRetryScheduled,
+        clock: binding.clock,
+      );
+
+      try {
+        await engine.runAll(
+          SyncPolicyType.background,
+          metadata: _metadataFromInputData(inputData),
+        );
+      } finally {
+        await engine.dispose();
+      }
+
       return true;
-    });
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Map<String, Object?> _metadataFromInputData(
+    Map<String, dynamic>? inputData,
+  ) {
+    if (inputData == null) {
+      return const <String, Object?>{};
+    }
+
+    return <String, Object?>{
+      for (final entry in inputData.entries) entry.key: entry.value,
+    };
   }
 }
 
@@ -34,7 +111,7 @@ class WorkmanagerBackgroundScheduler implements SyncBackgroundScheduler {
 
   Future<void> initialize({bool isInDebugMode = false}) {
     return _workmanager.initialize(
-      WorkmanagerSyncBridge.callbackDispatcher,
+      backgroundDispatcher,
       isInDebugMode: isInDebugMode,
     );
   }
@@ -82,4 +159,22 @@ class WorkmanagerBackgroundScheduler implements SyncBackgroundScheduler {
       initialDelay: delay,
     );
   }
+}
+
+class _WorkmanagerTaskBinding {
+  _WorkmanagerTaskBinding({
+    required this.taskRegistrations,
+    required this.stateStoreFactory,
+    required this.globalPreconditions,
+    required this.logger,
+    required this.onRetryScheduled,
+    required this.clock,
+  });
+
+  final List<SyncTaskRegistration> taskRegistrations;
+  final SyncTaskStateStoreFactory stateStoreFactory;
+  final List<SyncPrecondition> globalPreconditions;
+  final SyncLogger logger;
+  final RetryScheduleCallback? onRetryScheduled;
+  final DateTime Function()? clock;
 }
