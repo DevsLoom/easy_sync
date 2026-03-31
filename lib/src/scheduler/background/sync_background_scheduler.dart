@@ -1,4 +1,6 @@
+/// Platform scheduler interface used to register background work.
 abstract interface class SyncBackgroundScheduler {
+  /// Schedules periodic background work.
   Future<void> schedulePeriodic({
     required String uniqueName,
     required String taskName,
@@ -7,6 +9,7 @@ abstract interface class SyncBackgroundScheduler {
     Duration? initialDelay,
   });
 
+  /// Schedules one-off background work.
   Future<void> scheduleOneOff({
     required String uniqueName,
     required String taskName,
@@ -14,7 +17,9 @@ abstract interface class SyncBackgroundScheduler {
     Duration? initialDelay,
   });
 
+  /// Cancels a scheduled task by unique name.
   Future<void> cancelByUniqueName(String uniqueName);
 
+  /// Cancels all scheduled tasks.
   Future<void> cancelAll();
 }

@@ -1,12 +1,18 @@
+/// Logging interface used by sync components.
 abstract interface class SyncLogger {
+  /// Emits an informational message.
   void info(String message);
 
+  /// Emits a warning message.
   void warn(String message);
 
+  /// Emits an error message with optional error details.
   void error(String message, {Object? error, StackTrace? stackTrace});
 }
 
+/// A logger implementation that discards all messages.
 class NoopSyncLogger implements SyncLogger {
+  /// Creates a no-op logger.
   const NoopSyncLogger();
 
   @override
@@ -19,9 +25,12 @@ class NoopSyncLogger implements SyncLogger {
   void warn(String message) {}
 }
 
+/// A logger implementation that prints messages to stdout.
 class PrintSyncLogger implements SyncLogger {
+  /// Creates a print-based logger.
   const PrintSyncLogger({this.includeTimestamp = true});
 
+  /// Whether timestamps are prepended to printed log messages.
   final bool includeTimestamp;
 
   @override

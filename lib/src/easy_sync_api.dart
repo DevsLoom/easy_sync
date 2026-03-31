@@ -4,11 +4,21 @@ import 'scheduler/app_open/app_open_sync_scheduler.dart';
 import 'scheduler/background/sync_background_scheduler.dart';
 import 'package:workmanager/workmanager.dart';
 
-enum EasySyncBackgroundMode { periodic, iosBackgroundFetch }
+/// Supported background execution modes for [EasySyncBackgroundConfig].
+enum EasySyncBackgroundMode {
+  /// Periodic scheduler-driven background execution.
+  periodic,
 
+  /// iOS background fetch driven execution.
+  iosBackgroundFetch,
+}
+
+/// Couples a background scheduler with its initialization callback.
 class EasySyncBackgroundDriver {
+  /// Creates a background driver.
   EasySyncBackgroundDriver({required this.scheduler, required this.initialize});
 
+  /// Creates a workmanager-backed driver.
   factory EasySyncBackgroundDriver.workmanager({
     WorkmanagerBackgroundScheduler? scheduler,
   }) {
@@ -20,11 +30,16 @@ class EasySyncBackgroundDriver {
     );
   }
 
+  /// Scheduler implementation used for registration and cancellation.
   final SyncBackgroundScheduler scheduler;
+
+  /// Initialization callback required before background scheduling begins.
   final Future<void> Function() initialize;
 }
 
+/// Configuration for optional background sync support.
 class EasySyncBackgroundConfig {
+  /// Enables the common periodic background sync configuration.
   EasySyncBackgroundConfig.enabled({
     Duration frequency = EasySync.defaultBackgroundFrequency,
   }) : this._(
@@ -39,6 +54,7 @@ class EasySyncBackgroundConfig {
          driver: EasySyncBackgroundDriver.workmanager(),
        );
 
+  /// Disables background scheduling while keeping the setup API shape stable.
   EasySyncBackgroundConfig.disabled()
     : this._(
         isEnabled: false,
@@ -52,6 +68,7 @@ class EasySyncBackgroundConfig {
         driver: null,
       );
 
+  /// Creates a fully customizable periodic background configuration.
   EasySyncBackgroundConfig.periodic({
     required this.uniqueName,
     required Duration frequency,
@@ -65,6 +82,7 @@ class EasySyncBackgroundConfig {
        driver = driver ?? EasySyncBackgroundDriver.workmanager(),
        frequency = _normalizeFrequency(frequency);
 
+  /// Enables iOS Background Fetch mode.
   EasySyncBackgroundConfig.iosBackgroundFetch({
     this.taskName = Workmanager.iOSBackgroundTask,
     this.inputData = const <String, dynamic>{},
@@ -89,14 +107,31 @@ class EasySyncBackgroundConfig {
     required this.driver,
   });
 
+  /// Whether background execution is enabled.
   final bool isEnabled;
+
+  /// Selected background execution mode.
   final EasySyncBackgroundMode mode;
+
+  /// Unique scheduler name for periodic registrations.
   final String uniqueName;
+
+  /// Background task name used by the scheduler bridge.
   final String taskName;
+
+  /// Requested periodic frequency.
   final Duration frequency;
+
+  /// Input data passed to the background scheduler.
   final Map<String, dynamic> inputData;
+
+  /// Optional initial delay before first execution.
   final Duration? initialDelay;
+
+  /// Factory used to create a task state store in background contexts.
   final SyncTaskStateStoreFactory? stateStoreFactory;
+
+  /// Background driver used for scheduler initialization and registration.
   final EasySyncBackgroundDriver? driver;
 
   static Duration _normalizeFrequency(Duration frequency) {
@@ -107,16 +142,27 @@ class EasySyncBackgroundConfig {
   }
 }
 
+/// High-level facade for task registration, execution, and state streaming.
 class EasySync {
+  /// Default workmanager task name used for periodic background sync.
   static const String defaultBackgroundTaskName =
       'easy_sync.background.periodic';
+
+  /// Default unique registration name used for periodic background sync.
   static const String defaultBackgroundUniqueName =
       'easy_sync.background.periodic.default';
+
+  /// Default periodic background frequency.
   static const Duration defaultBackgroundFrequency = Duration(hours: 1);
+
+  /// Minimum background frequency enforced for periodic scheduling.
   static const Duration minimumBackgroundFrequency = Duration(minutes: 15);
+
+  /// Default metadata passed into background task execution.
   static const Map<String, dynamic> defaultBackgroundInputData =
       <String, dynamic>{'source': 'easy_sync.background.periodic'};
 
+  /// Creates and starts an [EasySync] instance with optional schedulers.
   static Future<EasySync> setup({
     required List<SyncTask> tasks,
     bool appOpenSync = false,
@@ -186,6 +232,7 @@ class EasySync {
     return easySync;
   }
 
+  /// Creates an [EasySync] instance without starting schedulers.
   factory EasySync.initialize({
     required List<SyncTask> tasks,
     SyncTaskStateStore? stateStore,
@@ -216,6 +263,7 @@ class EasySync {
     );
   }
 
+  /// Creates a manually configured [EasySync] instance.
   EasySync({
     required List<SyncTaskRegistration> taskRegistrations,
     required SyncTaskStateStore stateStore,
@@ -264,11 +312,14 @@ class EasySync {
   final AppOpenSyncScheduler? _appOpenScheduler;
   final String? _backgroundTaskName;
 
+  /// Stream of task state changes.
   Stream<SyncTaskState> get stateStream => _engine.stateUpdates;
 
   @Deprecated('Use stateStream instead.')
+  /// Deprecated alias for [stateStream].
   Stream<SyncTaskState> get stateUpdates => _engine.stateUpdates;
 
+  /// Runs a single task manually and returns its latest state.
   Future<SyncTaskState> runTask(
     String taskKey, {
     Map<String, Object?> metadata = const <String, Object?>{},
@@ -282,6 +333,7 @@ class EasySync {
     return _stateStore.getOrCreate(taskKey);
   }
 
+  /// Runs all tasks with manual policy enabled and returns their states.
   Future<List<SyncTaskState>> runAll({
     Map<String, Object?> metadata = const <String, Object?>{},
   }) async {
@@ -299,6 +351,7 @@ class EasySync {
         .toList();
   }
 
+  /// Releases scheduler and engine resources.
   Future<void> dispose() async {
     _appOpenScheduler?.stop();
 

@@ -1,3 +1,11 @@
+## 0.2.2
+
+### Changed
+
+- Added comprehensive `dartdoc` coverage across the public API surface for better pub.dev documentation quality.
+- Enabled and satisfied the `public_member_api_docs` lint to keep exported APIs documented going forward.
+- Improved inline API guidance for core engine, task contracts, schedulers, background adapters, and configuration types.
+
 ## 0.2.1
 
 ### Changed
@@ -20,8 +28,6 @@
 
 ## 0.1.0
 
-Initial public release.
-
 ### Added
 
 - Core sync orchestration with trigger-aware task policies.
@@ -34,5 +40,6 @@ Initial public release.
 
 ### Notes
 
+- Initial public release.
 - easy_sync is auth-agnostic, backend-agnostic, and database-agnostic.
 - iOS background execution timing is best-effort and not guaranteed.

@@ -2,3 +2,7 @@ include: package:lints/recommended.yaml
 
 # Keep analysis strict for package publishing quality.
 # Prefer fixing warnings in source instead of suppressing them here.
+
+linter:
+  rules:
+    - public_member_api_docs

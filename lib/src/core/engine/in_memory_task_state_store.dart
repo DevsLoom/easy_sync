@@ -1,6 +1,7 @@
 import '../contracts/task_state_store.dart';
 import '../models/task_state.dart';
 
+/// In-memory implementation of [SyncTaskStateStore].
 class InMemorySyncTaskStateStore implements SyncTaskStateStore {
   final Map<String, SyncTaskState> _states = <String, SyncTaskState>{};
 

@@ -7,10 +7,15 @@ import '../models/sync_result.dart';
 import 'precondition.dart';
 import 'sync_task_handler.dart';
 
+/// Callback used by [SyncTask.fn] to run task logic.
 typedef SyncTaskRunCallback = FutureOr<void> Function(SyncContext context);
+
+/// Predicate used to decide whether a thrown error should be retried.
 typedef SyncTaskRetryWhen = bool Function(Object error, StackTrace stackTrace);
 
+/// Describes a unit of sync work and its execution policy.
 abstract interface class SyncTask {
+  /// Creates a function-backed sync task without writing a custom class.
   factory SyncTask.fn({
     required String key,
     bool appOpen = true,
@@ -33,12 +38,16 @@ abstract interface class SyncTask {
     );
   }
 
+  /// Unique task key used for registration and state tracking.
   String get key;
 
+  /// Policy that controls when this task is allowed to run.
   SyncPolicy get policy;
 
+  /// Preconditions that must pass before task execution starts.
   List<SyncPrecondition> get preconditions;
 
+  /// Handler that performs the actual sync work.
   SyncTaskHandler get handler;
 }
 

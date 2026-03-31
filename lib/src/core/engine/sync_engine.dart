@@ -2,7 +2,23 @@ import 'dart:async';
 
 import '../core.dart';
 
+/// Core task execution engine responsible for orchestration, retries, and state updates.
 class SyncEngine {
+  /// Creates a sync execution engine.
+  ///
+  /// [taskRegistrations] are indexed by task key.
+  /// [stateStore] persists the latest task state.
+  /// [globalPreconditions] are evaluated for every task.
+  /// [logger] receives engine log output.
+  /// [onRetryScheduled] is notified when retries are queued.
+  /// [taskTimeout] limits a single task run.
+  /// [debugMode] enables extra diagnostics.
+  /// [isolateTaskFailures] prevents one task failure from aborting others.
+  /// [rateLimit] limits how often tasks can execute.
+  /// [circuitBreaker] temporarily opens after repeated failures.
+  /// [executionHistory], [consecutiveFailures], and [openCircuits] allow restoring
+  /// in-memory execution control state.
+  /// [clock] overrides the time source for testing.
   SyncEngine({
     required List<SyncTaskRegistration> taskRegistrations,
     required SyncTaskStateStore stateStore,
@@ -30,13 +46,29 @@ class SyncEngine {
 
   final Map<String, SyncTaskRegistration> _registrations;
   final SyncTaskStateStore _stateStore;
+
+  /// Preconditions evaluated before every task-specific precondition.
   final List<SyncPrecondition> globalPreconditions;
+
+  /// Logger used for engine diagnostics.
   final SyncLogger logger;
+
+  /// Optional callback invoked when a retry is scheduled.
   final RetryScheduleCallback? onRetryScheduled;
+
+  /// Optional maximum runtime allowed for a single task execution.
   final Duration? taskTimeout;
+
+  /// Whether debug-oriented behavior is enabled.
   final bool debugMode;
+
+  /// Whether task failures should be isolated from sibling task execution.
   final bool isolateTaskFailures;
+
+  /// Rate limit applied before a task can start.
   final SyncRateLimit rateLimit;
+
+  /// Circuit breaker applied before a task can start.
   final SyncCircuitBreaker circuitBreaker;
   final DateTime Function() _clock;
 
@@ -47,18 +79,22 @@ class SyncEngine {
   final StreamController<SyncTaskState> _stateUpdates =
       StreamController<SyncTaskState>.broadcast();
 
+  /// Stream of emitted task state updates.
   Stream<SyncTaskState> get stateUpdates => _stateUpdates.stream;
 
+  /// Registers a single task at runtime.
   void registerTask(SyncTaskRegistration registration) {
     _registrations[registration.task.key] = registration;
   }
 
+  /// Registers multiple tasks at runtime.
   void registerTasks(List<SyncTaskRegistration> registrations) {
     for (final registration in registrations) {
       registerTask(registration);
     }
   }
 
+  /// Runs a single task by key.
   Future<void> runTask(
     String taskKey, {
     SyncPolicyType policyType = SyncPolicyType.manual,
@@ -84,6 +120,7 @@ class SyncEngine {
     }
   }
 
+  /// Runs all tasks allowed by the given [policyType].
   Future<void> runAll(
     SyncPolicyType policyType, {
     Map<String, Object?> metadata = const <String, Object?>{},
@@ -114,8 +151,10 @@ class SyncEngine {
     }
   }
 
+  /// Returns the latest known states for all tasks.
   Future<List<SyncTaskState>> states() => _stateStore.list();
 
+  /// Releases engine resources.
   Future<void> dispose() async {
     await _stateUpdates.close();
   }
@@ -481,6 +520,7 @@ class SyncEngine {
   }
 }
 
+/// Callback fired when a retry has been scheduled.
 typedef RetryScheduleCallback =
     Future<void> Function({
       required String taskId,

@@ -3,26 +3,32 @@ import 'package:workmanager/workmanager.dart';
 import '../../core/core.dart';
 import '../../scheduler/background/sync_background_scheduler.dart';
 
+/// Signature used by the deprecated manual workmanager handler bridge.
 typedef WorkmanagerSyncHandler =
     Future<void> Function(String taskName, Map<String, dynamic>? inputData);
 
+/// Factory used to create state stores for background execution.
 typedef SyncTaskStateStoreFactory = SyncTaskStateStore Function();
 
 @pragma('vm:entry-point')
+/// Top-level dispatcher entrypoint used by workmanager isolates.
 void backgroundDispatcher() {
   Workmanager().executeTask(WorkmanagerSyncBridge.executeTask);
 }
 
+/// Bridge that maps workmanager task callbacks to registered sync tasks.
 class WorkmanagerSyncBridge {
   static WorkmanagerSyncHandler? _handler;
   static final Map<String, _WorkmanagerTaskBinding> _taskBindings =
       <String, _WorkmanagerTaskBinding>{};
 
   @Deprecated('Use registerTaskMapping to execute SyncEngine internally.')
+  /// Sets a legacy callback handler for background task execution.
   static void setHandler(WorkmanagerSyncHandler handler) {
     _handler = handler;
   }
 
+  /// Registers a background task mapping for workmanager execution.
   static void registerTaskMapping({
     required String taskName,
     required List<SyncTaskRegistration> taskRegistrations,
@@ -52,14 +58,17 @@ class WorkmanagerSyncBridge {
     );
   }
 
+  /// Removes a previously registered task mapping.
   static void unregisterTaskMapping(String taskName) {
     _taskBindings.remove(taskName);
   }
 
+  /// Clears all registered task mappings.
   static void clearTaskMappings() {
     _taskBindings.clear();
   }
 
+  /// Executes a mapped task from a workmanager callback.
   static Future<bool> executeTask(
     String taskName,
     Map<String, dynamic>? inputData,
@@ -121,12 +130,15 @@ class WorkmanagerSyncBridge {
   }
 }
 
+/// Workmanager-backed implementation of [SyncBackgroundScheduler].
 class WorkmanagerBackgroundScheduler implements SyncBackgroundScheduler {
+  /// Creates a workmanager background scheduler.
   WorkmanagerBackgroundScheduler({Workmanager? workmanager})
     : _workmanager = workmanager ?? Workmanager();
 
   final Workmanager _workmanager;
 
+  /// Initializes workmanager with the package background dispatcher.
   Future<void> initialize({
     @Deprecated(
       'No longer used by workmanager. Configure debug handlers via workmanager APIs.',

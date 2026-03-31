@@ -1,15 +1,19 @@
 import '../models/sync_context.dart';
 import 'precondition.dart';
 
+/// Function signature used to determine current network availability.
 typedef NetworkAvailabilityChecker = Future<bool> Function(SyncContext context);
 
+/// A precondition that blocks execution while the app is offline.
 class RequiresNetworkPrecondition implements SyncPrecondition {
+  /// Creates a network precondition with an optional custom connectivity check.
   RequiresNetworkPrecondition({NetworkAvailabilityChecker? checker})
-      : _checker = checker ?? _defaultChecker;
+    : _checker = checker ?? _defaultChecker;
 
   final NetworkAvailabilityChecker _checker;
 
   @override
+  /// Name used in blocked state reporting.
   String get name => 'requires-network';
 
   @override
