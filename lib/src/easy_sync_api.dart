@@ -2,6 +2,9 @@ import 'adapters/workmanager/workmanager_adapter.dart';
 import 'core/core.dart';
 import 'scheduler/app_open/app_open_sync_scheduler.dart';
 import 'scheduler/background/sync_background_scheduler.dart';
+import 'package:workmanager/workmanager.dart';
+
+enum EasySyncBackgroundMode { periodic, iosBackgroundFetch }
 
 class EasySyncBackgroundDriver {
   EasySyncBackgroundDriver({required this.scheduler, required this.initialize});
@@ -26,6 +29,7 @@ class EasySyncBackgroundConfig {
     Duration frequency = EasySync.defaultBackgroundFrequency,
   }) : this._(
          isEnabled: true,
+         mode: EasySyncBackgroundMode.periodic,
          uniqueName: EasySync.defaultBackgroundUniqueName,
          taskName: EasySync.defaultBackgroundTaskName,
          frequency: _normalizeFrequency(frequency),
@@ -38,6 +42,7 @@ class EasySyncBackgroundConfig {
   EasySyncBackgroundConfig.disabled()
     : this._(
         isEnabled: false,
+        mode: EasySyncBackgroundMode.periodic,
         uniqueName: EasySync.defaultBackgroundUniqueName,
         taskName: EasySync.defaultBackgroundTaskName,
         frequency: EasySync.defaultBackgroundFrequency,
@@ -56,11 +61,25 @@ class EasySyncBackgroundConfig {
     this.stateStoreFactory,
     EasySyncBackgroundDriver? driver,
   }) : isEnabled = true,
+       mode = EasySyncBackgroundMode.periodic,
        driver = driver ?? EasySyncBackgroundDriver.workmanager(),
        frequency = _normalizeFrequency(frequency);
 
+  EasySyncBackgroundConfig.iosBackgroundFetch({
+    this.taskName = Workmanager.iOSBackgroundTask,
+    this.inputData = const <String, dynamic>{},
+    this.stateStoreFactory,
+    EasySyncBackgroundDriver? driver,
+  }) : isEnabled = true,
+       mode = EasySyncBackgroundMode.iosBackgroundFetch,
+       uniqueName = EasySync.defaultBackgroundUniqueName,
+       frequency = EasySync.defaultBackgroundFrequency,
+       initialDelay = null,
+       driver = driver ?? EasySyncBackgroundDriver.workmanager();
+
   const EasySyncBackgroundConfig._({
     required this.isEnabled,
+    required this.mode,
     required this.uniqueName,
     required this.taskName,
     required this.frequency,
@@ -71,6 +90,7 @@ class EasySyncBackgroundConfig {
   });
 
   final bool isEnabled;
+  final EasySyncBackgroundMode mode;
   final String uniqueName;
   final String taskName;
   final Duration frequency;
@@ -146,13 +166,15 @@ class EasySync {
       );
 
       await driver.initialize();
-      await driver.scheduler.schedulePeriodic(
-        uniqueName: background.uniqueName,
-        taskName: background.taskName,
-        frequency: background.frequency,
-        inputData: background.inputData,
-        initialDelay: background.initialDelay,
-      );
+      if (background.mode == EasySyncBackgroundMode.periodic) {
+        await driver.scheduler.schedulePeriodic(
+          uniqueName: background.uniqueName,
+          taskName: background.taskName,
+          frequency: background.frequency,
+          inputData: background.inputData,
+          initialDelay: background.initialDelay,
+        );
+      }
     }
 
     return easySync;

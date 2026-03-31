@@ -127,6 +127,17 @@ class WorkmanagerBackgroundScheduler implements SyncBackgroundScheduler {
     return _workmanager.initialize(backgroundDispatcher);
   }
 
+  /// Android-only helper from workmanager.
+  ///
+  /// Returns `null` when the underlying platform does not support this API.
+  Future<bool?> isScheduledByUniqueName(String uniqueName) async {
+    try {
+      return await _workmanager.isScheduledByUniqueName(uniqueName);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<void> cancelAll() {
     return _workmanager.cancelAll();

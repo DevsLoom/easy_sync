@@ -205,6 +205,44 @@ void main() {
     });
 
     test(
+      'iosBackgroundFetch initializes bridge without periodic scheduling',
+      () async {
+        WidgetsFlutterBinding.ensureInitialized();
+
+        final backgroundTask = _TestTask(
+          key: 'ios-fetch-task',
+          policy: const SyncPolicy(background: true),
+        );
+        final backgroundScheduler = _FakeBackgroundScheduler();
+
+        final config = EasySyncBackgroundConfig.iosBackgroundFetch(
+          driver: EasySyncBackgroundDriver(
+            scheduler: backgroundScheduler,
+            initialize: backgroundScheduler.initialize,
+          ),
+        );
+
+        final easySync = await EasySync.setup(
+          tasks: [backgroundTask],
+          background: config,
+        );
+
+        expect(backgroundScheduler.initializeCount, 1);
+        expect(backgroundScheduler.scheduledTaskName, isNull);
+
+        final ok = await WorkmanagerSyncBridge.executeTask(
+          config.taskName,
+          const <String, dynamic>{'source': 'ios-background-fetch'},
+        );
+
+        expect(ok, isTrue);
+        expect(backgroundTask.count, 1);
+
+        await easySync.dispose();
+      },
+    );
+
+    test(
       'enabled background normalizes frequency to workmanager minimum',
       () async {
         final config = EasySyncBackgroundConfig.enabled(

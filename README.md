@@ -230,6 +230,17 @@ final easySync = await EasySync.setup(
 );
 ```
 
+On iOS, this uses the BGTaskScheduler periodic path (custom frequency, `processing` mode).
+
+For iOS Background Fetch mode (system-managed timing, no custom frequency), use:
+
+```dart
+final easySync = await EasySync.setup(
+  tasks: tasks,
+  background: EasySyncBackgroundConfig.iosBackgroundFetch(),
+);
+```
+
 To explicitly disable background scheduling while keeping the rest of `setup()` the same:
 
 ```dart
@@ -241,7 +252,9 @@ final easySync = await EasySync.setup(
 
 Keep in mind:
 - Android uses WorkManager semantics.
-- iOS uses BGTaskScheduler semantics via `workmanager`.
+- iOS supports two paths via `workmanager`:
+  - BGTaskScheduler periodic (`EasySyncBackgroundConfig.enabled(...)` / `.periodic(...)`)
+  - Background Fetch (`EasySyncBackgroundConfig.iosBackgroundFetch()`)
 - Android periodic work has a practical 15 minute minimum interval behavior.
 - If you pass less than 15 minutes, `easy_sync` clamps it to 15 minutes.
 - background timing is not guaranteed
@@ -272,6 +285,25 @@ iOS needs explicit native setup.
 4. Open `Signing & Capabilities`.
 5. Add `Background Modes`.
 6. Enable the background mode that matches your scheduling approach.
+
+#### Option A: Background Fetch (simpler, no custom frequency)
+
+Use this if you call `EasySyncBackgroundConfig.iosBackgroundFetch()`.
+
+Add these keys in `ios/Runner/Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>fetch</string>
+</array>
+```
+
+No AppDelegate registration is needed for this mode.
+
+#### Option B: BGTaskScheduler periodic (custom frequency)
+
+Use this if you call `EasySyncBackgroundConfig.enabled(...)` or `.periodic(...)`.
 
 For periodic background sync with workmanager, use BGTaskScheduler-style setup:
 
@@ -341,11 +373,13 @@ Use the lower-level APIs when you need custom control over:
 Available lower-level APIs:
 - `EasySync.initialize(...)`
 - `EasySyncBackgroundConfig.periodic(...)`
+- `EasySyncBackgroundConfig.iosBackgroundFetch(...)`
 - `SyncEngine`
 - `SyncTaskRegistration`
 - `WorkmanagerSyncBridge.registerTaskMapping(...)`
 - `WorkmanagerBackgroundScheduler.initialize()`
 - `WorkmanagerBackgroundScheduler.schedulePeriodic(...)`
+- `WorkmanagerBackgroundScheduler.isScheduledByUniqueName(...)` (Android only)
 
 Example:
 
@@ -475,7 +509,7 @@ This is useful for:
 ## Platform Notes
 
 - Android background work follows WorkManager behavior.
-- iOS background work follows BGTaskScheduler behavior through `workmanager`.
+- iOS background work can use BGTaskScheduler periodic mode or Background Fetch through `workmanager`.
 - Some devices and OS versions may delay or skip background work.
 - For native setup details, use the `workmanager` package documentation.
 
