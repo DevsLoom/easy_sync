@@ -486,6 +486,29 @@ Use retry only for transient failures such as:
 - short-lived server errors
 - temporary dependency failures
 
+## Rate Limit and Circuit Breaker
+
+Use execution controls when you want to protect your backend during instability or high trigger volume.
+
+```dart
+final easySync = await EasySync.setup(
+  tasks: tasks,
+  rateLimit: const SyncRateLimit.slidingWindow(
+    maxExecutions: 5,
+    per: Duration(minutes: 1),
+  ),
+  circuitBreaker: const SyncCircuitBreaker.standard(
+    failureThreshold: 3,
+    openFor: Duration(minutes: 5),
+  ),
+);
+```
+
+How it works:
+- rate limit blocks task execution when attempts exceed the configured sliding window
+- circuit breaker opens after repeated failures and temporarily blocks further execution
+- once the open duration passes, execution is allowed again
+
 ## State Tracking
 
 Use `stateStream` to observe task changes.

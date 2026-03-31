@@ -33,6 +33,8 @@ class WorkmanagerSyncBridge {
     Duration? taskTimeout,
     bool debugMode = false,
     bool isolateTaskFailures = true,
+    SyncRateLimit rateLimit = const SyncRateLimit.disabled(),
+    SyncCircuitBreaker circuitBreaker = const SyncCircuitBreaker.disabled(),
     DateTime Function()? clock,
   }) {
     _taskBindings[taskName] = _WorkmanagerTaskBinding(
@@ -44,6 +46,8 @@ class WorkmanagerSyncBridge {
       taskTimeout: taskTimeout,
       debugMode: debugMode,
       isolateTaskFailures: isolateTaskFailures,
+      rateLimit: rateLimit,
+      circuitBreaker: circuitBreaker,
       clock: clock,
     );
   }
@@ -81,6 +85,11 @@ class WorkmanagerSyncBridge {
         taskTimeout: binding.taskTimeout,
         debugMode: binding.debugMode,
         isolateTaskFailures: binding.isolateTaskFailures,
+        rateLimit: binding.rateLimit,
+        circuitBreaker: binding.circuitBreaker,
+        executionHistory: binding.executionHistory,
+        consecutiveFailures: binding.consecutiveFailures,
+        openCircuits: binding.openCircuits,
         clock: binding.clock,
       );
 
@@ -193,6 +202,8 @@ class _WorkmanagerTaskBinding {
     required this.taskTimeout,
     required this.debugMode,
     required this.isolateTaskFailures,
+    required this.rateLimit,
+    required this.circuitBreaker,
     required this.clock,
   });
 
@@ -204,5 +215,11 @@ class _WorkmanagerTaskBinding {
   final Duration? taskTimeout;
   final bool debugMode;
   final bool isolateTaskFailures;
+  final SyncRateLimit rateLimit;
+  final SyncCircuitBreaker circuitBreaker;
+  final Map<String, List<DateTime>> executionHistory =
+      <String, List<DateTime>>{};
+  final Map<String, int> consecutiveFailures = <String, int>{};
+  final Map<String, DateTime?> openCircuits = <String, DateTime?>{};
   final DateTime Function()? clock;
 }

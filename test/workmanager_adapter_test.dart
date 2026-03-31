@@ -101,6 +101,79 @@ void main() {
         expect(healthyTask.executionCount, 1);
       },
     );
+
+    test('applies mapped rate limit to background task execution', () async {
+      var now = DateTime(2026, 1, 1, 10, 0, 0);
+      final task = _CountingTask(
+        key: 'limited-bg-task',
+        policy: const SyncPolicy(background: true),
+      );
+
+      WorkmanagerSyncBridge.registerTaskMapping(
+        taskName: 'sync-background',
+        taskRegistrations: [SyncTaskRegistration(task: task)],
+        stateStoreFactory: InMemorySyncTaskStateStore.new,
+        rateLimit: const SyncRateLimit.slidingWindow(
+          maxExecutions: 1,
+          per: Duration(minutes: 1),
+        ),
+        clock: () => now,
+      );
+
+      final first = await WorkmanagerSyncBridge.executeTask(
+        'sync-background',
+        const <String, dynamic>{'source': 'periodic'},
+      );
+      final second = await WorkmanagerSyncBridge.executeTask(
+        'sync-background',
+        const <String, dynamic>{'source': 'periodic'},
+      );
+
+      expect(first, isTrue);
+      expect(second, isTrue);
+      expect(task.executionCount, 1);
+
+      now = now.add(const Duration(minutes: 2));
+      await WorkmanagerSyncBridge.executeTask(
+        'sync-background',
+        const <String, dynamic>{'source': 'periodic'},
+      );
+
+      expect(task.executionCount, 2);
+    });
+
+    test(
+      'applies mapped circuit breaker to background task execution',
+      () async {
+        var now = DateTime(2026, 1, 1, 10, 0, 0);
+        final failingTask = _AlwaysFailTask(
+          key: 'failing-bg-task',
+          policy: const SyncPolicy(background: true),
+        );
+
+        WorkmanagerSyncBridge.registerTaskMapping(
+          taskName: 'sync-background',
+          taskRegistrations: [SyncTaskRegistration(task: failingTask)],
+          stateStoreFactory: InMemorySyncTaskStateStore.new,
+          circuitBreaker: const SyncCircuitBreaker.standard(
+            failureThreshold: 2,
+            openFor: Duration(minutes: 5),
+          ),
+          clock: () => now,
+        );
+
+        await WorkmanagerSyncBridge.executeTask('sync-background', null);
+        await WorkmanagerSyncBridge.executeTask('sync-background', null);
+        await WorkmanagerSyncBridge.executeTask('sync-background', null);
+
+        expect(failingTask.executionCount, 2);
+
+        now = now.add(const Duration(minutes: 6));
+        await WorkmanagerSyncBridge.executeTask('sync-background', null);
+
+        expect(failingTask.executionCount, 3);
+      },
+    );
   });
 }
 
@@ -131,5 +204,35 @@ class _CountingTaskHandler implements SyncTaskHandler {
   Future<SyncResult> execute(SyncContext context) async {
     _task.executionCount += 1;
     return SyncResult.success();
+  }
+}
+
+class _AlwaysFailTask implements SyncTask {
+  _AlwaysFailTask({required this.key, required this.policy});
+
+  @override
+  final String key;
+
+  @override
+  final SyncPolicy policy;
+
+  int executionCount = 0;
+
+  @override
+  List<SyncPrecondition> get preconditions => const <SyncPrecondition>[];
+
+  @override
+  SyncTaskHandler get handler => _AlwaysFailTaskHandler(this);
+}
+
+class _AlwaysFailTaskHandler implements SyncTaskHandler {
+  _AlwaysFailTaskHandler(this._task);
+
+  final _AlwaysFailTask _task;
+
+  @override
+  Future<SyncResult> execute(SyncContext context) async {
+    _task.executionCount += 1;
+    return SyncResult.failure(error: StateError('backend unavailable'));
   }
 }

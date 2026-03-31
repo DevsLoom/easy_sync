@@ -8,6 +8,7 @@ export 'contracts/task_state_store.dart';
 export 'engine/in_memory_task_state_store.dart';
 export 'engine/sync_engine.dart';
 export 'engine/sync_orchestrator.dart';
+export 'models/execution_controls.dart';
 export 'models/retry_config.dart';
 export 'models/sync_context.dart';
 export 'models/sync_policy.dart';

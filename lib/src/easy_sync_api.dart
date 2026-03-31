@@ -124,6 +124,8 @@ class EasySync {
     Duration? taskTimeout,
     bool debugMode = false,
     bool isolateTaskFailures = true,
+    SyncRateLimit rateLimit = const SyncRateLimit.disabled(),
+    SyncCircuitBreaker circuitBreaker = const SyncCircuitBreaker.disabled(),
   }) async {
     final taskRegistrations = <SyncTaskRegistration>[
       for (final task in tasks) SyncTaskRegistration(task: task),
@@ -135,6 +137,8 @@ class EasySync {
       taskTimeout: taskTimeout,
       debugMode: debugMode,
       isolateTaskFailures: isolateTaskFailures,
+      rateLimit: rateLimit,
+      circuitBreaker: circuitBreaker,
     );
 
     final appOpenScheduler = appOpenSync ? AppOpenSyncScheduler(engine) : null;
@@ -163,6 +167,8 @@ class EasySync {
         taskTimeout: taskTimeout,
         debugMode: debugMode,
         isolateTaskFailures: isolateTaskFailures,
+        rateLimit: rateLimit,
+        circuitBreaker: circuitBreaker,
       );
 
       await driver.initialize();
@@ -189,6 +195,8 @@ class EasySync {
     Duration? taskTimeout,
     bool debugMode = false,
     bool isolateTaskFailures = true,
+    SyncRateLimit rateLimit = const SyncRateLimit.disabled(),
+    SyncCircuitBreaker circuitBreaker = const SyncCircuitBreaker.disabled(),
     DateTime Function()? clock,
   }) {
     return EasySync(
@@ -202,6 +210,8 @@ class EasySync {
       taskTimeout: taskTimeout,
       debugMode: debugMode,
       isolateTaskFailures: isolateTaskFailures,
+      rateLimit: rateLimit,
+      circuitBreaker: circuitBreaker,
       clock: clock,
     );
   }
@@ -215,6 +225,8 @@ class EasySync {
     Duration? taskTimeout,
     bool debugMode = false,
     bool isolateTaskFailures = true,
+    SyncRateLimit rateLimit = const SyncRateLimit.disabled(),
+    SyncCircuitBreaker circuitBreaker = const SyncCircuitBreaker.disabled(),
     DateTime Function()? clock,
   }) : _stateStore = stateStore,
        _taskRegistrations = taskRegistrations,
@@ -227,6 +239,8 @@ class EasySync {
          taskTimeout: taskTimeout,
          debugMode: debugMode,
          isolateTaskFailures: isolateTaskFailures,
+         rateLimit: rateLimit,
+         circuitBreaker: circuitBreaker,
          clock: clock,
        ),
        _appOpenScheduler = null,

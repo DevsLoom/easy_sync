@@ -228,6 +228,74 @@ void main() {
 
       expect(logger.infos.any((msg) => msg.contains('[DEBUG]')), isTrue);
     });
+
+    test('blocks task when sliding-window rate limit is exceeded', () async {
+      var now = DateTime(2026, 1, 1, 10, 0, 0);
+      final task = _CountingTask(key: 'rate-limited-task');
+      final store = InMemorySyncTaskStateStore();
+      final engine = SyncEngine(
+        taskRegistrations: [SyncTaskRegistration(task: task)],
+        stateStore: store,
+        rateLimit: const SyncRateLimit.slidingWindow(
+          maxExecutions: 1,
+          per: Duration(minutes: 1),
+        ),
+        clock: () => now,
+      );
+
+      await engine.runTask('rate-limited-task');
+      await engine.runTask('rate-limited-task');
+
+      final blockedState = store.getOrCreate('rate-limited-task');
+      expect(task.executionCount, 1);
+      expect(blockedState.status, SyncTaskStatus.blocked);
+      expect(blockedState.lastError, contains('Rate limit exceeded'));
+
+      now = now.add(const Duration(minutes: 2));
+      await engine.runTask('rate-limited-task');
+
+      final finalState = store.getOrCreate('rate-limited-task');
+      expect(task.executionCount, 2);
+      expect(finalState.status, SyncTaskStatus.success);
+    });
+
+    test('opens circuit breaker after repeated failures', () async {
+      var now = DateTime(2026, 1, 1, 10, 0, 0);
+      final store = InMemorySyncTaskStateStore();
+      final engine = SyncEngine(
+        taskRegistrations: [
+          SyncTaskRegistration(
+            task: _TaskWithHandler(
+              key: 'circuit-task',
+              handler: _FakeTaskHandler(
+                SyncResult.failure(error: StateError('server down')),
+              ),
+            ),
+          ),
+        ],
+        stateStore: store,
+        circuitBreaker: const SyncCircuitBreaker.standard(
+          failureThreshold: 2,
+          openFor: Duration(minutes: 5),
+        ),
+        clock: () => now,
+      );
+
+      await engine.runTask('circuit-task');
+      await engine.runTask('circuit-task');
+      await engine.runTask('circuit-task');
+
+      final blockedState = store.getOrCreate('circuit-task');
+      expect(blockedState.status, SyncTaskStatus.blocked);
+      expect(blockedState.lastError, contains('Circuit breaker open until'));
+
+      now = now.add(const Duration(minutes: 6));
+      await engine.runTask('circuit-task');
+
+      final recoveredState = store.getOrCreate('circuit-task');
+      expect(recoveredState.status, SyncTaskStatus.failed);
+      expect(recoveredState.lastError, contains('Bad state: server down'));
+    });
   });
 }
 

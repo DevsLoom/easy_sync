@@ -12,9 +12,17 @@ class SyncEngine {
     this.taskTimeout,
     this.debugMode = false,
     this.isolateTaskFailures = true,
+    this.rateLimit = const SyncRateLimit.disabled(),
+    this.circuitBreaker = const SyncCircuitBreaker.disabled(),
+    Map<String, List<DateTime>>? executionHistory,
+    Map<String, int>? consecutiveFailures,
+    Map<String, DateTime?>? openCircuits,
     DateTime Function()? clock,
   }) : _stateStore = stateStore,
        _clock = clock ?? DateTime.now,
+       _executions = executionHistory ?? <String, List<DateTime>>{},
+       _consecutiveFailures = consecutiveFailures ?? <String, int>{},
+       _openCircuits = openCircuits ?? <String, DateTime?>{},
        _registrations = {
          for (final registration in taskRegistrations)
            registration.task.key: registration,
@@ -28,9 +36,14 @@ class SyncEngine {
   final Duration? taskTimeout;
   final bool debugMode;
   final bool isolateTaskFailures;
+  final SyncRateLimit rateLimit;
+  final SyncCircuitBreaker circuitBreaker;
   final DateTime Function() _clock;
 
   final Map<String, Future<void>> _runningTasks = <String, Future<void>>{};
+  final Map<String, List<DateTime>> _executions;
+  final Map<String, int> _consecutiveFailures;
+  final Map<String, DateTime?> _openCircuits;
   final StreamController<SyncTaskState> _stateUpdates =
       StreamController<SyncTaskState>.broadcast();
 
@@ -174,6 +187,25 @@ class SyncEngine {
       },
     );
 
+    final openUntil = _openCircuitUntil(taskKey, now);
+    if (openUntil != null) {
+      final blockedState = _stateStore
+          .getOrCreate(taskKey)
+          .copyWith(
+            status: SyncTaskStatus.blocked,
+            lastFinishedAt: now,
+            lastTrigger: trigger,
+            lastError:
+                'Circuit breaker open until ${openUntil.toIso8601String()}',
+            clearNextRetryAt: true,
+          );
+      await _saveAndEmit(blockedState);
+      logger.warn(
+        'Task "$taskKey" blocked by circuit breaker until ${openUntil.toIso8601String()}.',
+      );
+      return;
+    }
+
     final blocked = await _firstBlockedPrecondition(
       context,
       taskPreconditions: <SyncPrecondition>[
@@ -197,6 +229,24 @@ class SyncEngine {
       );
       return;
     }
+
+    if (!_canExecuteUnderRateLimit(taskKey, now)) {
+      final blockedState = _stateStore
+          .getOrCreate(taskKey)
+          .copyWith(
+            status: SyncTaskStatus.blocked,
+            lastFinishedAt: now,
+            lastTrigger: trigger,
+            lastError:
+                'Rate limit exceeded (${rateLimit.maxExecutions}/${rateLimit.per.inSeconds}s window)',
+            clearNextRetryAt: true,
+          );
+      await _saveAndEmit(blockedState);
+      logger.warn('Task "$taskKey" blocked by rate limit policy.');
+      return;
+    }
+
+    _recordExecution(taskKey, now);
 
     final previousState = _stateStore.getOrCreate(taskKey);
     final attempt = previousState.attempt + 1;
@@ -233,6 +283,7 @@ class SyncEngine {
     final finishedAt = _clock();
 
     if (result.success) {
+      _recordSuccess(taskKey);
       await _saveAndEmit(
         _stateStore
             .getOrCreate(taskKey)
@@ -254,6 +305,8 @@ class SyncEngine {
     final delay = result.retryable
         ? registration.task.policy.retry.nextDelay(attempt)
         : null;
+
+    _recordFailure(taskKey, finishedAt);
 
     await _saveAndEmit(
       _stateStore
@@ -288,6 +341,70 @@ class SyncEngine {
       error: error,
       stackTrace: result.stackTrace,
     );
+  }
+
+  DateTime? _openCircuitUntil(String taskKey, DateTime now) {
+    if (!circuitBreaker.enabled) {
+      return null;
+    }
+
+    final openUntil = _openCircuits[taskKey];
+    if (openUntil == null) {
+      return null;
+    }
+
+    if (now.isAfter(openUntil) || now.isAtSameMomentAs(openUntil)) {
+      _openCircuits[taskKey] = null;
+      _consecutiveFailures[taskKey] = 0;
+      return null;
+    }
+
+    return openUntil;
+  }
+
+  bool _canExecuteUnderRateLimit(String taskKey, DateTime now) {
+    if (!rateLimit.enabled) {
+      return true;
+    }
+
+    final history = _executions.putIfAbsent(taskKey, () => <DateTime>[]);
+    final windowStart = now.subtract(rateLimit.per);
+    history.removeWhere((timestamp) => timestamp.isBefore(windowStart));
+    return history.length < rateLimit.maxExecutions;
+  }
+
+  void _recordExecution(String taskKey, DateTime now) {
+    if (!rateLimit.enabled) {
+      return;
+    }
+
+    final history = _executions.putIfAbsent(taskKey, () => <DateTime>[]);
+    history.add(now);
+  }
+
+  void _recordSuccess(String taskKey) {
+    if (!circuitBreaker.enabled) {
+      return;
+    }
+
+    _consecutiveFailures[taskKey] = 0;
+    _openCircuits[taskKey] = null;
+  }
+
+  void _recordFailure(String taskKey, DateTime finishedAt) {
+    if (!circuitBreaker.enabled) {
+      return;
+    }
+
+    final failures = (_consecutiveFailures[taskKey] ?? 0) + 1;
+    _consecutiveFailures[taskKey] = failures;
+
+    if (failures >= circuitBreaker.failureThreshold) {
+      _openCircuits[taskKey] = finishedAt.add(circuitBreaker.openFor);
+      logger.warn(
+        'Task "$taskKey" circuit breaker opened for ${circuitBreaker.openFor}.',
+      );
+    }
   }
 
   Future<void> _scheduleRetry({

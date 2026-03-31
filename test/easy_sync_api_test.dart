@@ -181,6 +181,46 @@ void main() {
       expect(missing, isFalse);
     });
 
+    test('setup forwards rate limit controls to background mappings', () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      final task = _TestTask(
+        key: 'rate-limited-background-task',
+        policy: const SyncPolicy(background: true),
+      );
+      final backgroundScheduler = _FakeBackgroundScheduler();
+
+      final easySync = await EasySync.setup(
+        tasks: [task],
+        background: EasySyncBackgroundConfig.periodic(
+          uniqueName: EasySync.defaultBackgroundUniqueName,
+          taskName: EasySync.defaultBackgroundTaskName,
+          frequency: const Duration(hours: 1),
+          driver: EasySyncBackgroundDriver(
+            scheduler: backgroundScheduler,
+            initialize: backgroundScheduler.initialize,
+          ),
+        ),
+        rateLimit: const SyncRateLimit.slidingWindow(
+          maxExecutions: 1,
+          per: Duration(minutes: 1),
+        ),
+      );
+
+      await WorkmanagerSyncBridge.executeTask(
+        EasySync.defaultBackgroundTaskName,
+        const <String, dynamic>{'source': 'periodic'},
+      );
+      await WorkmanagerSyncBridge.executeTask(
+        EasySync.defaultBackgroundTaskName,
+        const <String, dynamic>{'source': 'periodic'},
+      );
+
+      expect(task.count, 1);
+
+      await easySync.dispose();
+    });
+
     test('disabled background skips automatic background setup', () async {
       WidgetsFlutterBinding.ensureInitialized();
 
