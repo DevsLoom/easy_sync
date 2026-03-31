@@ -7,6 +7,9 @@ class EasySync {
     List<SyncPrecondition> globalPreconditions = const <SyncPrecondition>[],
     SyncLogger logger = const NoopSyncLogger(),
     RetryScheduleCallback? onRetryScheduled,
+    Duration? taskTimeout,
+    bool debugMode = false,
+    bool isolateTaskFailures = true,
     DateTime Function()? clock,
   }) {
     return EasySync(
@@ -17,6 +20,9 @@ class EasySync {
       globalPreconditions: globalPreconditions,
       logger: logger,
       onRetryScheduled: onRetryScheduled,
+      taskTimeout: taskTimeout,
+      debugMode: debugMode,
+      isolateTaskFailures: isolateTaskFailures,
       clock: clock,
     );
   }
@@ -27,6 +33,9 @@ class EasySync {
     List<SyncPrecondition> globalPreconditions = const <SyncPrecondition>[],
     SyncLogger logger = const NoopSyncLogger(),
     RetryScheduleCallback? onRetryScheduled,
+    Duration? taskTimeout,
+    bool debugMode = false,
+    bool isolateTaskFailures = true,
     DateTime Function()? clock,
   }) : _stateStore = stateStore,
        _taskRegistrations = taskRegistrations,
@@ -36,6 +45,9 @@ class EasySync {
          globalPreconditions: globalPreconditions,
          logger: logger,
          onRetryScheduled: onRetryScheduled,
+         taskTimeout: taskTimeout,
+         debugMode: debugMode,
+         isolateTaskFailures: isolateTaskFailures,
          clock: clock,
        );
 

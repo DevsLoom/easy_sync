@@ -3,8 +3,8 @@ import 'package:workmanager/workmanager.dart';
 import '../../core/core.dart';
 import '../../scheduler/background/sync_background_scheduler.dart';
 
-typedef WorkmanagerSyncHandler = Future<void> Function(
-    String taskName, Map<String, dynamic>? inputData);
+typedef WorkmanagerSyncHandler =
+    Future<void> Function(String taskName, Map<String, dynamic>? inputData);
 
 typedef SyncTaskStateStoreFactory = SyncTaskStateStore Function();
 
@@ -30,6 +30,9 @@ class WorkmanagerSyncBridge {
     List<SyncPrecondition> globalPreconditions = const <SyncPrecondition>[],
     SyncLogger logger = const NoopSyncLogger(),
     RetryScheduleCallback? onRetryScheduled,
+    Duration? taskTimeout,
+    bool debugMode = false,
+    bool isolateTaskFailures = true,
     DateTime Function()? clock,
   }) {
     _taskBindings[taskName] = _WorkmanagerTaskBinding(
@@ -38,6 +41,9 @@ class WorkmanagerSyncBridge {
       globalPreconditions: globalPreconditions,
       logger: logger,
       onRetryScheduled: onRetryScheduled,
+      taskTimeout: taskTimeout,
+      debugMode: debugMode,
+      isolateTaskFailures: isolateTaskFailures,
       clock: clock,
     );
   }
@@ -72,6 +78,9 @@ class WorkmanagerSyncBridge {
         globalPreconditions: binding.globalPreconditions,
         logger: binding.logger,
         onRetryScheduled: binding.onRetryScheduled,
+        taskTimeout: binding.taskTimeout,
+        debugMode: binding.debugMode,
+        isolateTaskFailures: binding.isolateTaskFailures,
         clock: binding.clock,
       );
 
@@ -105,7 +114,7 @@ class WorkmanagerSyncBridge {
 
 class WorkmanagerBackgroundScheduler implements SyncBackgroundScheduler {
   WorkmanagerBackgroundScheduler({Workmanager? workmanager})
-      : _workmanager = workmanager ?? Workmanager();
+    : _workmanager = workmanager ?? Workmanager();
 
   final Workmanager _workmanager;
 
@@ -168,6 +177,9 @@ class _WorkmanagerTaskBinding {
     required this.globalPreconditions,
     required this.logger,
     required this.onRetryScheduled,
+    required this.taskTimeout,
+    required this.debugMode,
+    required this.isolateTaskFailures,
     required this.clock,
   });
 
@@ -176,5 +188,8 @@ class _WorkmanagerTaskBinding {
   final List<SyncPrecondition> globalPreconditions;
   final SyncLogger logger;
   final RetryScheduleCallback? onRetryScheduled;
+  final Duration? taskTimeout;
+  final bool debugMode;
+  final bool isolateTaskFailures;
   final DateTime Function()? clock;
 }

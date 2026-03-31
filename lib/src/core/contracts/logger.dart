@@ -18,3 +18,40 @@ class NoopSyncLogger implements SyncLogger {
   @override
   void warn(String message) {}
 }
+
+class PrintSyncLogger implements SyncLogger {
+  const PrintSyncLogger({this.includeTimestamp = true});
+
+  final bool includeTimestamp;
+
+  @override
+  void error(String message, {Object? error, StackTrace? stackTrace}) {
+    final buffer = StringBuffer(_prefix('ERROR'))..write(message);
+    if (error != null) {
+      buffer.write(' | error=$error');
+    }
+    if (stackTrace != null) {
+      buffer.write(' | stackTrace=$stackTrace');
+    }
+    print(buffer.toString());
+  }
+
+  @override
+  void info(String message) {
+    print('${_prefix('INFO')}$message');
+  }
+
+  @override
+  void warn(String message) {
+    print('${_prefix('WARN')}$message');
+  }
+
+  String _prefix(String level) {
+    if (!includeTimestamp) {
+      return '[$level] ';
+    }
+
+    final now = DateTime.now().toIso8601String();
+    return '[$now][$level] ';
+  }
+}

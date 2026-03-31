@@ -9,19 +9,25 @@ class SyncEngine {
     this.globalPreconditions = const <SyncPrecondition>[],
     this.logger = const NoopSyncLogger(),
     this.onRetryScheduled,
+    this.taskTimeout,
+    this.debugMode = false,
+    this.isolateTaskFailures = true,
     DateTime Function()? clock,
-  })  : _stateStore = stateStore,
-        _clock = clock ?? DateTime.now,
-        _registrations = {
-          for (final registration in taskRegistrations)
-            registration.task.key: registration,
-        };
+  }) : _stateStore = stateStore,
+       _clock = clock ?? DateTime.now,
+       _registrations = {
+         for (final registration in taskRegistrations)
+           registration.task.key: registration,
+       };
 
   final Map<String, SyncTaskRegistration> _registrations;
   final SyncTaskStateStore _stateStore;
   final List<SyncPrecondition> globalPreconditions;
   final SyncLogger logger;
   final RetryScheduleCallback? onRetryScheduled;
+  final Duration? taskTimeout;
+  final bool debugMode;
+  final bool isolateTaskFailures;
   final DateTime Function() _clock;
 
   final Map<String, Future<void>> _runningTasks = <String, Future<void>>{};
@@ -51,7 +57,7 @@ class SyncEngine {
       return;
     }
 
-    final future = _executeTask(
+    final future = _executeTaskSafely(
       taskKey: taskKey,
       trigger: _triggerFromPolicyType(policyType),
       metadata: metadata,
@@ -76,11 +82,22 @@ class SyncEngine {
         continue;
       }
 
-      await runTask(
-        registration.task.key,
-        policyType: policyType,
-        metadata: metadata,
-      );
+      try {
+        await runTask(
+          registration.task.key,
+          policyType: policyType,
+          metadata: metadata,
+        );
+      } catch (error, stackTrace) {
+        logger.error(
+          'Task "${registration.task.key}" crashed during runAll and was isolated.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (!isolateTaskFailures) {
+          rethrow;
+        }
+      }
     }
   }
 
@@ -88,6 +105,49 @@ class SyncEngine {
 
   Future<void> dispose() async {
     await _stateUpdates.close();
+  }
+
+  Future<void> _executeTaskSafely({
+    required String taskKey,
+    required SyncTrigger trigger,
+    required Map<String, Object?> metadata,
+  }) async {
+    try {
+      await _executeTask(
+        taskKey: taskKey,
+        trigger: trigger,
+        metadata: metadata,
+      );
+    } catch (error, stackTrace) {
+      logger.error(
+        'Task "$taskKey" crashed and was isolated safely.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+
+      try {
+        await _saveAndEmit(
+          _stateStore
+              .getOrCreate(taskKey)
+              .copyWith(
+                status: SyncTaskStatus.failed,
+                lastError: error.toString(),
+                lastFinishedAt: _clock(),
+                clearNextRetryAt: true,
+              ),
+        );
+      } catch (stateError, stateStack) {
+        logger.error(
+          'Failed to persist crash state for task "$taskKey".',
+          error: stateError,
+          stackTrace: stateStack,
+        );
+      }
+
+      if (!isolateTaskFailures) {
+        rethrow;
+      }
+    }
   }
 
   Future<void> _executeTask({
@@ -100,6 +160,8 @@ class SyncEngine {
       logger.warn('Task "$taskKey" is not registered; skipping execution.');
       return;
     }
+
+    _debug('Executing task "$taskKey" with trigger "$trigger".');
 
     final now = _clock();
     final context = SyncContext(
@@ -120,7 +182,9 @@ class SyncEngine {
       ],
     );
     if (blocked != null) {
-      final blockedState = _stateStore.getOrCreate(taskKey).copyWith(
+      final blockedState = _stateStore
+          .getOrCreate(taskKey)
+          .copyWith(
             status: SyncTaskStatus.blocked,
             lastFinishedAt: now,
             lastTrigger: trigger,
@@ -128,8 +192,9 @@ class SyncEngine {
             clearNextRetryAt: true,
           );
       await _saveAndEmit(blockedState);
-      logger
-          .info('Task "$taskKey" blocked: ${blocked.reason ?? blocked.name}.');
+      logger.info(
+        'Task "$taskKey" blocked: ${blocked.reason ?? blocked.name}.',
+      );
       return;
     }
 
@@ -148,7 +213,19 @@ class SyncEngine {
 
     SyncResult result;
     try {
-      result = await registration.task.handler.execute(context);
+      final execution = registration.task.handler.execute(context);
+      if (taskTimeout == null) {
+        result = await execution;
+      } else {
+        result = await execution.timeout(
+          taskTimeout!,
+          onTimeout: () => SyncResult.failure(
+            error: TimeoutException(
+              'Task "$taskKey" timed out after $taskTimeout',
+            ),
+          ),
+        );
+      }
     } catch (error, stackTrace) {
       result = SyncResult.failure(error: error, stackTrace: stackTrace);
     }
@@ -157,7 +234,9 @@ class SyncEngine {
 
     if (result.success) {
       await _saveAndEmit(
-        _stateStore.getOrCreate(taskKey).copyWith(
+        _stateStore
+            .getOrCreate(taskKey)
+            .copyWith(
               status: SyncTaskStatus.success,
               attempt: 0,
               lastFinishedAt: finishedAt,
@@ -168,7 +247,8 @@ class SyncEngine {
       return;
     }
 
-    final error = result.error ??
+    final error =
+        result.error ??
         StateError('Task "$taskKey" failed with unknown error.');
 
     final delay = result.retryable
@@ -176,7 +256,9 @@ class SyncEngine {
         : null;
 
     await _saveAndEmit(
-      _stateStore.getOrCreate(taskKey).copyWith(
+      _stateStore
+          .getOrCreate(taskKey)
+          .copyWith(
             status: SyncTaskStatus.failed,
             lastError: error.toString(),
             lastFinishedAt: finishedAt,
@@ -195,11 +277,7 @@ class SyncEngine {
       }
 
       unawaited(
-        _scheduleRetry(
-          taskKey: taskKey,
-          delay: delay,
-          metadata: metadata,
-        ),
+        _scheduleRetry(taskKey: taskKey, delay: delay, metadata: metadata),
       );
       logger.warn('Task "$taskKey" failed and retry was scheduled in $delay.');
       return;
@@ -222,16 +300,16 @@ class SyncEngine {
     await runTask(
       taskKey,
       policyType: _policyTypeFromTrigger(SyncTrigger.retry),
-      metadata: <String, Object?>{
-        ...metadata,
-        'scheduledRetry': true,
-      },
+      metadata: <String, Object?>{...metadata, 'scheduledRetry': true},
     );
   }
 
   Future<void> _saveAndEmit(SyncTaskState state) async {
     await _stateStore.save(state);
     _stateUpdates.add(state);
+    _debug(
+      'Task state updated: taskKey=${state.taskId}, status=${state.status.name}, attempt=${state.attempt}',
+    );
   }
 
   Future<_PreconditionFailure?> _firstBlockedPrecondition(
@@ -253,6 +331,13 @@ class SyncEngine {
       }
     }
     return null;
+  }
+
+  void _debug(String message) {
+    if (!debugMode) {
+      return;
+    }
+    logger.info('[DEBUG] $message');
   }
 
   SyncTrigger _triggerFromPolicyType(SyncPolicyType policyType) {
@@ -279,11 +364,12 @@ class SyncEngine {
   }
 }
 
-typedef RetryScheduleCallback = Future<void> Function({
-  required String taskId,
-  required Duration delay,
-  required Map<String, Object?> metadata,
-});
+typedef RetryScheduleCallback =
+    Future<void> Function({
+      required String taskId,
+      required Duration delay,
+      required Map<String, Object?> metadata,
+    });
 
 class _PreconditionFailure implements SyncPrecondition {
   _PreconditionFailure({required this.name, this.reason});

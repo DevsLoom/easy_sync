@@ -49,9 +49,7 @@ void main() {
 
       WorkmanagerSyncBridge.registerTaskMapping(
         taskName: 'sync-background',
-        taskRegistrations: [
-          SyncTaskRegistration(task: task),
-        ],
+        taskRegistrations: [SyncTaskRegistration(task: task)],
         stateStoreFactory: () {
           throw StateError('cannot build state store');
         },
@@ -65,6 +63,44 @@ void main() {
       expect(ok, isFalse);
       expect(task.executionCount, 0);
     });
+
+    test(
+      'isolates crashing task and still runs remaining background tasks',
+      () async {
+        final healthyTask = _CountingTask(
+          key: 'healthy-bg-task',
+          policy: const SyncPolicy(background: true),
+        );
+
+        WorkmanagerSyncBridge.registerTaskMapping(
+          taskName: 'sync-background',
+          taskRegistrations: [
+            SyncTaskRegistration(
+              task: _CountingTask(
+                key: 'crashing-bg-task',
+                policy: const SyncPolicy(background: true),
+              ),
+              preconditions: [
+                PredicatePrecondition(
+                  name: 'crashing-precondition',
+                  predicate: (_) async => throw StateError('boom'),
+                ),
+              ],
+            ),
+            SyncTaskRegistration(task: healthyTask),
+          ],
+          stateStoreFactory: InMemorySyncTaskStateStore.new,
+        );
+
+        final ok = await WorkmanagerSyncBridge.executeTask(
+          'sync-background',
+          <String, dynamic>{'source': 'periodic'},
+        );
+
+        expect(ok, isTrue);
+        expect(healthyTask.executionCount, 1);
+      },
+    );
   });
 }
 
