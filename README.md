@@ -43,34 +43,19 @@ Set up `easy_sync` with a minimal task:
 ```dart
 import 'package:easy_sync/easy_sync.dart';
 
-class SimpleSyncTask implements SyncTask {
-
-  @override
-  String get key => 'simple';
-
-  @override
-  SyncPolicy get policy => const SyncPolicy(
-        manual: true,
-      );
-
-  @override
-  List<SyncPrecondition> get preconditions => [];
-
-  @override
-  SyncTaskHandler get handler => _SimpleSyncHandler();
-}
-
-class _SimpleSyncHandler implements SyncTaskHandler {
-
-  @override
-  Future<SyncResult> execute(SyncContext context) async {
-    return SyncResult.success();
-  }
-}
-
 Future<void> example() async {
   final easySync = await EasySync.setup(
-    tasks: <SyncTask>[SimpleSyncTask()],
+    tasks: <SyncTask>[
+      SyncTask.fn(
+        key: 'sync_users',
+        manual: true,
+        appOpen: true,
+        background: true,
+        run: (context) async {
+          // Call your repository or API client here.
+        },
+      ),
+    ],
     appOpenSync: true,
     background: EasySyncBackgroundConfig.enabled(
       frequency: const Duration(hours: 1),
@@ -113,17 +98,41 @@ import 'package:easy_sync/easy_sync.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  Future<void> uploadPendingItems() async {
+    // Call your repository or API layer.
+  }
+
+  Future<String?> readAccessToken() async {
+    // Read from your auth module.
+    return 'token';
+  }
+
   final easySync = await EasySync.setup(
     // 1) Define your app tasks.
     tasks: <SyncTask>[
-      UploadPendingItemsTask(
-        upload: () async {
-          // Call your repository or API layer.
+      SyncTask.fn(
+        key: 'upload_pending_items',
+        appOpen: true,
+        manual: true,
+        background: true,
+        retry: RetryConfig.exponential(
+          initialDelay: Duration(seconds: 1),
+          maxRetries: 4,
+        ),
+        preconditions: <SyncPrecondition>[
+          RequiresNetworkPrecondition(
+            checker: (context) async =>
+                context.value<bool>('hasNetwork') ?? false,
+          ),
+          PredicatePrecondition(
+            name: 'auth-ready',
+            predicate: (context) async => await readAccessToken() != null,
+          ),
+        ],
+        run: (context) async {
+          await uploadPendingItems();
         },
-        readAccessToken: () async {
-          // Read from your auth module.
-          return 'token';
-        },
+        retryWhen: (error, stackTrace) => true,
       ),
     ],
     // 2) Automatically trigger app-open sync on start and resume.
@@ -167,75 +176,6 @@ class MyApp extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class UploadPendingItemsTask implements SyncTask {
-  UploadPendingItemsTask({
-    required this.upload,
-    required this.readAccessToken,
-  });
-
-  final Future<void> Function() upload;
-  final Future<String?> Function() readAccessToken;
-
-  @override
-  String get key => 'upload_pending_items';
-
-  @override
-  SyncPolicy get policy => const SyncPolicy(
-        appOpen: true,
-        manual: true,
-        background: true,
-        retry: RetryConfig.exponential(
-          initialDelay: Duration(seconds: 1),
-          maxRetries: 4,
-        ),
-      );
-
-  @override
-  List<SyncPrecondition> get preconditions => <SyncPrecondition>[
-        RequiresNetworkPrecondition(
-          checker: (context) async => context.value<bool>('hasNetwork') ?? false,
-        ),
-        _AuthReadyPrecondition(readAccessToken: readAccessToken),
-      ];
-
-  @override
-  SyncTaskHandler get handler => _UploadPendingItemsHandler(upload: upload);
-}
-
-class _UploadPendingItemsHandler implements SyncTaskHandler {
-  _UploadPendingItemsHandler({required this.upload});
-
-  final Future<void> Function() upload;
-
-  @override
-  Future<SyncResult> execute(SyncContext context) async {
-    try {
-      await upload();
-      return SyncResult.success();
-    } catch (error, stackTrace) {
-      return SyncResult.retryable(error: error, stackTrace: stackTrace);
-    }
-  }
-}
-
-class _AuthReadyPrecondition implements SyncPrecondition {
-  _AuthReadyPrecondition({required this.readAccessToken});
-
-  final Future<String?> Function() readAccessToken;
-
-  @override
-  String get name => 'auth-ready';
-
-  @override
-  Future<PreconditionResult> check(SyncContext context) async {
-    final token = await readAccessToken();
-    if (token == null) {
-      return PreconditionResult.blocked(reason: 'Missing access token');
-    }
-    return PreconditionResult.allow();
   }
 }
 ```

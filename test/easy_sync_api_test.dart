@@ -10,6 +10,69 @@ void main() {
   });
 
   group('EasySync', () {
+    test('SyncTask.fn executes without a custom task class', () async {
+      var count = 0;
+      final easySync = EasySync.initialize(
+        tasks: [
+          SyncTask.fn(
+            key: 'fn-task',
+            manual: true,
+            appOpen: false,
+            background: false,
+            run: (context) async {
+              expect(context.value<String>('source'), 'manual');
+              count += 1;
+            },
+          ),
+        ],
+      );
+
+      final state = await easySync.runTask(
+        'fn-task',
+        metadata: const <String, Object?>{'source': 'manual'},
+      );
+
+      expect(count, 1);
+      expect(state.status, SyncTaskStatus.success);
+
+      await easySync.dispose();
+    });
+
+    test('SyncTask.fn keeps policy and preconditions configurable', () async {
+      final precondition = PredicatePrecondition(
+        name: 'has-token',
+        predicate: (context) async => context.value<bool>('ready') ?? false,
+      );
+      final task = SyncTask.fn(
+        key: 'fn-configurable',
+        manual: true,
+        appOpen: false,
+        background: false,
+        preconditions: [precondition],
+        run: (_) async {},
+      );
+
+      expect(task.policy.manual, isTrue);
+      expect(task.policy.appOpen, isFalse);
+      expect(task.policy.background, isFalse);
+      expect(task.preconditions, hasLength(1));
+      expect(task.preconditions.single.name, 'has-token');
+    });
+
+    test('SyncTask.fn can map thrown errors to retryable results', () async {
+      final result = await SyncTask.fn(
+        key: 'fn-retryable',
+        run: (_) async {
+          throw StateError('temporary');
+        },
+        retryWhen: (error, stackTrace) => error is StateError,
+      ).handler.execute(const SyncContext());
+
+      expect(result.retryable, isTrue);
+      expect(result.failure, isTrue);
+      expect(result.success, isFalse);
+    });
+
     test('runTask executes a task manually and returns final state', () async {
       final task = _TestTask(
         key: 'manual-task',
